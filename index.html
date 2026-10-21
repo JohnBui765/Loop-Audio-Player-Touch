@@ -1357,7 +1357,7 @@ const PAGE_SHIFT = 20, PAGE = 1 << PAGE_SHIFT;           // samples per page; mu
 const PAGES_KEPT = 8;                                    // pages the engine holds at most (2 MB each per channel)
 const MP3_PRE = 12, MP3_POST = 4;                        // frames decoded before and after a stretch (bit reservoir, decoder delay)
 const WAVE_PASS_RATE = 16000, WAVE_RAW_BUDGET = 16e6;    // the waveform pass: its rate, and the most samples its copy keeps
-const SRC_V = 1;                                         // version of the frame index kept beside the waveforms
+const SRC_V = 2;                                         // version of the frame index kept beside the waveforms
 const DECODE_RATES = [48000, 44100, 32000, 24000, 22050, 16000, 12000, 8000];
 const decodeRateFor = (dur, cap, budget = DECODE_BUDGET) => { const want = Math.min(cap, budget / Math.max(1, dur)); return DECODE_RATES.find((r) => r <= want) || 8000; };
 const pageRate = () => (engine.ctx ? clamp(engine.ctx.sampleRate, 8000, 48000) : 48000);
@@ -1441,11 +1441,14 @@ async function scanMp3(blob) {
   }
   if (first < 0) return null;
   const spf = v1 ? 1152 : 576;
+  let xbytes = null, xat = 0;
   {                                                      // a Xing / Info / VBRI frame in front holds the encoder's notes, not sound
     const mono = (u[first + 3] >> 6) === 3, at = first + 4 + (u[first + 1] & 1 ? 0 : 2) + (v1 ? (mono ? 17 : 32) : (mono ? 9 : 17));
     const tag = (q) => (q + 4 <= u.length ? String.fromCharCode(u[q], u[q + 1], u[q + 2], u[q + 3]) : '');
-    if (tag(at) === 'Xing' || tag(at) === 'Info' || tag(first + 36) === 'VBRI') first += lenAt(first);
+    const t = tag(at) === 'Xing' || tag(at) === 'Info' ? at : tag(first + 36) === 'VBRI' ? first + 36 : -1;
+    if (t >= 0) { const L = lenAt(first); xbytes = u.slice(first, first + L); xat = t - first; first += L; }
   }
+  const tpl = u.slice(first, first + 4);
   let off = new Uint32Array(Math.max(4096, Math.ceil((size - ub - first) / 100) + 2)), n = 0, q = ub + first;
   while (q + 4 <= size) {
     if (q < ub || q + 4 > ub + u.length) await load(q);
@@ -1465,7 +1468,54 @@ async function scanMp3(blob) {
   if (q > size && n) { n--; q = off[n]; }               // the last frame was cut short
   if (n < 16) return null;
   off[n] = Math.min(q, size);
-  return { n, off: off.slice(0, n + 1), spf, sr0 };
+  if (xbytes) {                                          // a header whose frame count doesn't match the frames found is no use
+    const dv = new DataView(xbytes.buffer), vbri = xbytes[xat] === 0x56;
+    const said = vbri ? dv.getUint32(xat + 14) : dv.getUint32(xat + 4) & 1 ? dv.getUint32(xat + 8) : n;
+    if (Math.abs(said - n) > 2) xbytes = null;
+  }
+  return { n, off: off.slice(0, n + 1), spf, sr0, tpl, xbytes, xat };
+}
+// Safari makes room for the whole length an MP3's header declares before decoding it, so a piece that kept the file's
+// own header would claim the entire recording (gigabytes for a long one). Every piece gets a header frame of its own,
+// declaring exactly its frames: the file's own one rewritten (pieces from the start, so the encoder's delay is handled
+// as for the whole file), or a minimal Xing frame.
+function crc16(u, a, b) {                                // the LAME tag's checksum (CRC-16, polynomial 0xA001)
+  let c = 0;
+  for (let i = a; i < b; i++) { c ^= u[i]; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xA001 : c >>> 1; }
+  return c;
+}
+function ownHead(src, E) {                               // the file's header frame, declaring frames 0…E
+  const f = src.xbytes.slice(), dv = new DataView(f.buffer), at = src.xat, total = f.length + src.off[E] - src.off[0], cut = src.n - E;
+  if (f[at] === 0x56) { dv.setUint32(at + 10, total); dv.setUint32(at + 14, Math.max(1, dv.getUint32(at + 14) - cut)); return f; }   // VBRI
+  const flags = dv.getUint32(at + 4);
+  let p = at + 8;
+  if (flags & 1) { dv.setUint32(p, Math.max(1, dv.getUint32(p) - cut)); p += 4; }
+  if (flags & 2) { dv.setUint32(p, total); p += 4; }
+  if (flags & 4) p += 100;
+  if (flags & 8) p += 4;
+  if (p + 36 <= f.length) {                              // a LAME tag: its length, then its checksum, kept valid the way it was made
+    const c = p + 34, was = dv.getUint16(c);
+    const lame = (u) => crc16(u, 0, c);                  // LAME: every byte before the checksum
+    const ff = (u) => { if (u.length < 190 || c + 2 > 190) return -1; const z = u.slice(0, 190); z[c] = z[c + 1] = 0; return crc16(z, 0, 190); };   // ffmpeg: 190 bytes
+    const how = lame(src.xbytes) === was ? lame : ff(src.xbytes) === was ? ff : null;
+    if (how) { dv.setUint32(p + 28, total); dv.setUint16(c, how(f)); }
+  }
+  return f;
+}
+function xingHead(src, frames, bytes) {                  // a minimal Xing frame declaring `frames` frames
+  const v1 = src.spf === 1152, h = src.tpl, mono = (h[3] >> 6) === 3, at = 4 + (v1 ? (mono ? 17 : 32) : (mono ? 9 : 17));
+  let bri = h[2] >> 4, len = 0;
+  for (; bri < 15; bri++) { len = Math.floor((v1 ? 144000 : 72000) * MP3_KB[v1 ? 1 : 0][bri] / src.sr0); if (len >= at + 16) break; }
+  const f = new Uint8Array(len), dv = new DataView(f.buffer);
+  f[0] = 0xFF; f[1] = h[1] | 1; f[2] = (Math.min(bri, 14) << 4) | (h[2] & 0x0C); f[3] = h[3];   // no checksum, no padding
+  f[at] = 0x58; f[at + 1] = 0x69; f[at + 2] = 0x6E; f[at + 3] = 0x67;                        // 'Xing'
+  dv.setUint32(at + 4, 3); dv.setUint32(at + 8, frames); dv.setUint32(at + 12, len + bytes);   // frame count and byte count
+  return f;
+}
+// The bytes to decode for frames S…E (`own`: with the file's own header, as pieces from the start are).
+function mp3Piece(src, S, E, own = S === 0) {
+  const head = own && src.xbytes ? ownHead(src, E) : xingHead(src, E - S, src.off[E] - src.off[S]);
+  return new Blob([head, src.blob.slice(src.off[S], src.off[E])]);
 }
 // How alike a[ia…] and b[ib…] are over n samples, looking at every `step`th one (1 = the same shape).
 function likeness(a, ia, b, ib, n, step) {
@@ -1483,18 +1533,19 @@ function loudest(x, lo, hi, W) {                         // the loudest W sample
 // stretch that starts mid-file. If the decoder doesn't behave as expected the recording is decoded whole instead.
 async function calibrateMp3(blob, s) {
   const spf = s.spf, sr = s.sr0, DMAX = 2 * spf + 2112, W = Math.round(sr * 0.05);
+  s.blob = blob;
   for (const secs of [40, 90]) {
     const Ec = Math.min(s.n, Math.ceil(sr * secs / spf)), Sm = Ec >> 1;
     if (Ec - Sm < MP3_PRE + 24) return false;            // too short to measure (and quick to decode whole)
     let w0 = -1, Rw = null;
     {
-      const ref = await decodeAt(sr, await sliceBytes(blob, 0, s.off[Ec])), R = ref.getChannelData(0);
+      const ref = await decodeAt(sr, await mp3Piece(s, 0, Ec, true).arrayBuffer()), R = ref.getChannelData(0);
       s.stereo = isStereo(ref);
       w0 = loudest(R, (Sm + MP3_PRE + 4) * spf, R.length - W - DMAX, W);
       if (w0 >= 0) Rw = R.slice(w0, w0 + W);
     }
     if (w0 < 0) { if (Ec === s.n) return false; continue; }   // silence: try a longer stretch
-    const h0 = await decodeAt(sr, await sliceBytes(blob, s.off[0], s.off[Ec])), A = h0.getChannelData(0);
+    const h0 = await decodeAt(sr, await mp3Piece(s, 0, Ec, false).arrayBuffer()), A = h0.getChannelData(0);
     let delta = 0, bv = -1;
     for (let d = -DMAX; d <= DMAX; d++) {
       const ib = w0 - d;
@@ -1504,7 +1555,7 @@ async function calibrateMp3(blob, s) {
     }
     if (likeness(Rw, 0, A, w0 - delta, W, 1) < 0.98) return false;
     const k0 = Ec * spf - h0.length;
-    const mid = await decodeAt(sr, await sliceBytes(blob, s.off[Sm], s.off[Ec])), M = mid.getChannelData(0);
+    const mid = await decodeAt(sr, await mp3Piece(s, Sm, Ec, false).arrayBuffer()), M = mid.getChannelData(0);
     let dm = -1;                                         // whole frames the decoder left out at the start of a mid-file stretch
     for (let d = 0; d <= MP3_PRE && dm < 0; d++) {
       const ib = w0 - ((Sm + d) * spf + delta);
@@ -1524,7 +1575,8 @@ async function mp3Source(id, blob) {
   if (!(d && d.v === SRC_V && d.kind === 'mp3' && d.size === blob.size && d.off && d.off.length === d.n + 1)) {
     const s = await scanMp3(blob);
     if (!s || !(await calibrateMp3(blob, s))) return null;
-    d = { v: SRC_V, kind: 'mp3', size: blob.size, n: s.n, off: s.off, spf: s.spf, sr0: s.sr0, delta: s.delta, k: s.k, nat: s.nat, stereo: s.stereo };
+    d = { v: SRC_V, kind: 'mp3', size: blob.size, n: s.n, off: s.off, spf: s.spf, sr0: s.sr0, tpl: s.tpl, xbytes: s.xbytes, xat: s.xat,
+      delta: s.delta, k: s.k, nat: s.nat, stereo: s.stereo };
     waveDb.put(id + '|src', d).catch(() => {});
   }
   return Object.assign({}, d, { blob });
@@ -1603,7 +1655,7 @@ async function readRange(src, a, b, rate) {
     const spf = src.spf;
     const S0 = Math.max(0, Math.floor((a * sc - src.delta) / spf) - MP3_PRE), E = Math.min(src.n, Math.ceil((b * sc - src.delta) / spf) + MP3_POST);
     if (E <= S0) return out;
-    ab = await decodeAt(rate, await sliceBytes(src.blob, S0 ? src.off[S0] : 0, src.off[E]));
+    ab = await decodeAt(rate, await mp3Piece(src, S0, E).arrayBuffer());
     if (!S0) i0 = 0;                                     // from the very start: decoded with the file's own header, like the whole file
     else {
       const miss = ((E - S0) * spf - src.k - ab.length * sc) / spf, d = clamp(Math.round(miss), 0, MP3_PRE);   // frames left out at the start
@@ -1794,7 +1846,7 @@ function invalidateAudio(id) {
   S.waves.delete(id); S.peaks.delete(id); S.noWave.delete(id); srcCache.delete(id); srcPend.delete(id); waveBuilding.delete(id); wavePct.delete(id);
   if (warm && warm.id === id) warm = null;
   if (wholeCache && wholeCache.id === id) wholeCache = null;
-  waveDb.del(id + '|src').catch(() => {});
+  waveDb.del(id + '|src').catch(() => {}); waveDb.del(id + '|w').catch(() => {});
 }
 
 /* ---------- the waveform: made once, in a background pass over the recording ---------- */
@@ -1921,9 +1973,18 @@ function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
   } else openTrack(t, autoplay);
   persist();
 }
+// If the app closes unexpectedly (iOS out of memory, say) while a recording is being opened or its waveform made, that
+// recording isn't opened again by itself next time, so one recording can never stop the app from starting.
+const openGuard = {
+  key: 'echoLoopTouch.opening',
+  start(id) { try { localStorage.setItem(this.key, id); } catch (e) {} },
+  done(id) { try { if (localStorage.getItem(this.key) === id) localStorage.removeItem(this.key); } catch (e) {} },
+  take() { let id = null; try { id = localStorage.getItem(this.key); localStorage.removeItem(this.key); } catch (e) {} return id; },
+};
 async function openTrack(t, autoplay) {
   const token = ++openToken;
   loadingId = t.id;
+  openGuard.start(t.id);
   engineStop();
   if (autoplay) engine.wantPlay = true;
   renderNowPlaying(); renderPlayState();
@@ -1949,9 +2010,11 @@ async function openTrack(t, autoplay) {
     loadingId = null;
     pendingSeek = null;
     onLoaded();
+    if (S.waves.has(t.id) || S.noWave.has(t.id)) openGuard.done(t.id);   // nothing heavy left to do for it
     if (engine.wantPlay) { engine.wantPlay = false; playNow(); }
   } catch (err) {
     if (err && err.skipped) return;                       // not needed any more
+    openGuard.done(t.id);
     if (!src && !S.waves.has(t.id) && !waveBuilding.has(t.id)) { S.noWave.add(t.id); onWave(t.id); }
     if (token !== openToken) return;
     loadingId = null; engine.wantPlay = false; syncKeepAlive();
@@ -2479,7 +2542,7 @@ async function loadWave(t) {
   if (S.waves.has(id)) { const w = S.waves.get(id); S.waves.delete(id); S.waves.set(id, w); return; }   // most recently used last
   if (S.noWave.has(id) || waveBuilding.has(id)) return;
   let cached = null;
-  try { cached = await waveDb.get(id); } catch (e) {}
+  try { cached = await waveDb.get(id + '|w'); } catch (e) {}
   if (S.blobs.get(id) !== blob) return;
   if (cached && cached.v === WAVE_V && cached.raw && cached.raw.length && cached.env && cached.rms5) {
     if (S.waves.has(id) || waveBuilding.has(id)) return;
@@ -2502,7 +2565,7 @@ async function buildWave(id, rate, raw, store, blob, pre) {
     const w = await buildWaveData(rate, raw, pre);
     if (!byId(id) || S.blobs.get(id) !== blob) return;   // deleted, or its audio replaced, meanwhile
     S.waves.set(id, w); S.noWave.delete(id);
-    if (store) waveDb.put(id, { v: WAVE_V, rate: w.rate, raw: w.raw, env: w.env, rms5: w.rms5, rmsRate: w.rmsRate }).then(() => touchWave(id, waveBytes(w))).catch(() => {});
+    if (store) waveDb.put(id + '|w', { v: WAVE_V, rate: w.rate, raw: w.raw, env: w.env, rms5: w.rms5, rmsRate: w.rmsRate }).then(() => touchWave(id, waveBytes(w))).catch(() => {});
     const env = { v: 1, bps: PEAK_BPS, data: w.env };
     if (!S.peaks.has(id)) db.putPeaks(id, env).catch(() => {});      // Echo Loop+ can reuse it
     S.peaks.set(id, env);
@@ -2521,14 +2584,15 @@ function touchWave(id, bytes) {
   for (const [k, v] of Object.entries(ix).sort((x, y) => x[1].t - y[1].t)) {
     if (total <= WAVE_CACHE_BYTES) break;
     if (k === id || k === S.currentId) continue;
-    total -= v.b || 0; delete ix[k]; waveDb.del(k).catch(() => {});
+    total -= v.b || 0; delete ix[k]; waveDb.del(k + '|w').catch(() => {});
   }
   saveWaveIndex(ix);
 }
 function forgetWave(id) {
   const ix = waveIndex();
   if (ix[id]) { delete ix[id]; saveWaveIndex(ix); }
-  waveDb.del(id).catch(() => {});
+  waveDb.del(id).catch(() => {});                       // (the old format)
+  waveDb.del(id + '|w').catch(() => {});
   waveDb.del(id + '|src').catch(() => {});                // its MP3 frame index
 }
 function evictWaves() {
@@ -2538,6 +2602,7 @@ function evictWaves() {
   }
 }
 function onWave(id) {
+  if (S.waves.has(id) || S.noWave.has(id)) openGuard.done(id);
   if (id !== S.currentId) return;
   ovCache = null; renderWaveMsg(); requestDraw();
 }
@@ -5114,7 +5179,7 @@ function wire() {
       refreshOffline(); refreshLibrary();
     } else persist();
   });
-  window.addEventListener('pagehide', persist);
+  window.addEventListener('pagehide', () => { persist(); if (S.currentId) openGuard.done(S.currentId); });
   if (window.matchMedia) {
     const mq = matchMedia('(prefers-color-scheme: dark)');
     const onTheme = () => { readColors(); requestDraw(); };
@@ -5179,8 +5244,11 @@ async function boot() {
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   el.banner.hidden = !(WEB && isIOS && !standalone() && !bannerOff);
 
-  const last = byId(saved.currentId);
-  if (last) {
+  const crashed = byId(openGuard.take());               // the app closed while this one was being opened
+  const last = crashed ? null : byId(saved.currentId);
+  if (crashed) {
+    setTimeout(() => { openLibrary(); toast(`“${crashed.name}” wasn’t reopened: the app closed while opening it last time. Tap it to try again.`, 6000); }, 300);
+  } else if (last) {
     const pos = Number(saved.position) || 0, sv = saved.sec;
     loadTrack(last, { autoplay: false, startAt: pos, view: saved.view });
     if (sv && isFinite(sv.a) && isFinite(sv.b) && sv.b - sv.a >= MIN_SEC) {   // bring back the section that was looping
@@ -5190,7 +5258,7 @@ async function boot() {
       setLoopFlag(); applyRate(); updateMetadata();
       if (!saved.view) revealSection(true);
     }
-  } else if (S.tracks.length) {
+  } else if (S.tracks.length && !crashed) {
     const q = listFor(S.filter).length ? listFor(S.filter) : S.tracks;
     S.queueFolder = listFor(S.filter).length ? S.filter : ALL;
     loadTrack(q[0], { autoplay: false });
@@ -5210,9 +5278,10 @@ async function boot() {
     waveDb.keys().then((keys) => {
       const ix = waveIndex(), ids = [];
       for (const key of keys) {
-        const id = String(key).split('|')[0], t = byId(id);
+        const [id, kind] = String(key).split('|'), t = byId(id);
         if (!t) { forgetWave(id); continue; }
-        if (key !== id) continue;                          // an MP3 frame index: kept and dropped with its waveform
+        if (kind === undefined) { waveDb.del(key).catch(() => {}); continue; }   // the old format (made again when opened), never read
+        if (kind !== 'w') continue;                        // an MP3 frame index: kept and dropped with its waveform
         ids.push(id);
         if (!ix[id]) ix[id] = { t: 0, b: Math.round((t.duration || 60) * 32000) };
       }
@@ -5228,7 +5297,7 @@ if (/[?&]debug\b/.test(location.search)) {
     wandAt, wandRange, splitSection, soundBlocks, snapTime, undo, redo, setTool, setDetect, startSection, exitSection, saveSectionAsFlag,
     buildOrder, randInt, renderSet, cropSection, cutSection, openShuffleBuilder, enginePosition, heardFrame, loadTrack, byId, setEdge, applySound,
     keep, ctxRunning, tAtX, xOfT, hitSection, openLibrary, closeLibrary, isLandscape, offerFile,
-    makeSource, readRange, srcLen, decodeAt, pager, renderSource, pageFrom, edgesOf, xfFor };
+    makeSource, readRange, srcLen, decodeAt, pager, renderSource, pageFrom, edgesOf, xfFor, mp3Piece, crc16 };
 }
 boot();
 })();

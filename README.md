@@ -57,7 +57,7 @@ The ‹ › buttons beside A and B move an edge 10 ms at a time when you're zoom
 - **Shuffle sets, crops and cuts are WAV files**, so they take more space than MP3s: about 5 MB per minute (10 MB in stereo). Very long ones are written at a lower rate to fit the iPhone's memory (a cut of a 2-hour lecture comes out at 8 kHz).
 - **If Play makes no sound**, check the volume first. Some iOS 26 versions lose sound in Home Screen web apps because of an Apple bug; restarting the iPhone clears it.
 - **Opened in Safari instead of from the Home Screen**, it shares one library with any other Echo Loop app opened in Safari from the same GitHub account. Keep only one of them open at a time: a tab left open in the background holds an old copy of the library and can save it over newer changes.
-- **Updating later.** If you change any file, also change `elt-v2` to `elt-v3` (and so on) at the top of `sw.js`. The app picks up the new version the next time it's opened online.
+- **Updating later.** If you change any file, also change `elt-v3` to `elt-v4` (and so on) at the top of `sw.js`. The app picks up the new version the next time it's opened online.
 
 ## Files
 

@@ -1225,13 +1225,14 @@ function onEngineMsg(m) {
   if (m.id !== engine.id) return;                       // left over from a recording that has been switched away from
   const H = engine.hist;
   switch (m.type) {
-    case 'pos': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); pagerAt(m.pos); break;
+    case 'pos': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); pagerAt(m.pos); syncLockScreen(); break;
     case 'need': pagerWant(m.page, true); break;            // the sound is waiting for this page
     case 'jump':
       H.push({ frame: m.frame, pos: m.pos, rate: engine.playing ? m.rate : 0 });
       pagerAt(m.pos);
       if (m.kind === 'seek' && m.seq === engine.seekSeq) engine.seekFrame = m.frame;
       if ((m.kind === 'wrap' && m.gen === engine.loopGen) || m.kind === 'filewrap') emit('wrap', m.kind);
+      syncLockScreen();
       break;
     case 'loopdone': if (m.gen === engine.loopGen) emit('loopdone'); break;
     case 'playing': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); emit('playing'); break;
@@ -1970,7 +1971,10 @@ function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
     const to = pendingSeek || 0; pendingSeek = null;
     seekTo(to);
     if (autoplay) playNow();
-  } else openTrack(t, autoplay);
+  } else {
+    openTrack(t, autoplay);
+    tellLockScreen(t.duration, pendingSeek || 0);         // its own length on the Lock Screen while it opens
+  }
   persist();
 }
 // If the app closes unexpectedly (iOS out of memory, say) while a recording is being opened or its waveform made, that
@@ -3539,11 +3543,28 @@ function applyMetadata() {
   try { MS.metadata = t ? new MediaMetadata({ title: t.name, artist, album, artwork: ART }) : null; } catch (e) {}
 }
 function setMSState(s) { if (MS) try { MS.playbackState = s; } catch (e) {} }
-function updatePositionState() {
-  if (!MS || !MS.setPositionState) return;
-  const d = audio.duration;
-  if (!isFinite(d) || d <= 0) return;
-  try { MS.setPositionState({ duration: d, playbackRate: effRate(), position: clamp(audio.currentTime || 0, 0, d) }); } catch (e) {}
+// iOS runs the Lock Screen's clock on by itself from the last position it was told. It is told where the sound is going
+// (a jump the engine has made counts at once, before it is heard), and told again whenever the sound has gone somewhere
+// its clock doesn't know about: a section loop or a repeat jumping back, a wait for audio to be read.
+// Safari passes a new position on only if it is more than 5 s from the last one it sent, or if the duration or rate
+// changed; a phrase loop jumps back less than that. So every report alternates the duration by a microsecond.
+let msPos = null, msFlip = false;                        // what the Lock Screen was last told
+function lockPos() {
+  const H = engine.hist, e = H[H.length - 1], d = engine.duration || 0;
+  if (!engine.playing || !e || !engine.ctx || (engine.seekTarget != null && engine.seekFrame < 0)) return clamp(audio.currentTime || 0, 0, d);
+  return clamp(e.pos + (heardFrame() - e.frame) / engine.ctx.sampleRate * (e.rate || 0), 0, d);
+}
+function tellLockScreen(d, position) {
+  if (!MS || !MS.setPositionState || !isFinite(d) || d <= 0) return;
+  const playbackRate = effRate();
+  position = clamp(position, 0, d); msFlip = !msFlip;
+  try { MS.setPositionState({ duration: msFlip ? d + 1e-6 : d, playbackRate, position }); msPos = { position, playbackRate, d, at: performance.now() }; } catch (e) {}
+}
+function updatePositionState() { tellLockScreen(audio.duration, lockPos()); }
+function syncLockScreen() {                              // on every engine report (they keep coming with the screen locked)
+  if (!msPos || audio.paused) return;
+  const said = Math.min(msPos.d, msPos.position + (performance.now() - msPos.at) / 1000 * msPos.playbackRate);
+  if (Math.abs(said - lockPos()) > 0.25) updatePositionState();
 }
 
 /* ================= rendering ================= */

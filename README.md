@@ -52,12 +52,12 @@ The ‹ › buttons beside A and B move an edge 10 ms at a time when you're zoom
 - **The first Play** switches the sound engine on. iPhone lets a web app make sound only after a tap, so the first tap on Play (or on a recording or a flag) starts it.
 - **Screen off.** Start playing, then press the side button. The engine loops on the iPhone's audio thread, so sections stay exact with the screen off, and a silent companion sound keeps iOS from putting the app to sleep. Pause, skip and scrub from the Lock Screen. If a folder ever stalls between recordings with the screen off, open ⋯ above the library list → **Join into one track** and play that instead.
 - **Silent mode.** It keeps playing with the iPhone set to Silent, like a music app.
-- **Long recordings.** The whole recording is held in memory for exact playback, so long ones are kept at a lower quality: full quality up to about 11 minutes, 16 kHz (clear speech) up to about half an hour, 12 kHz up to about 45 minutes, phone-call quality beyond that. For pronunciation work on a long lecture, import it in parts of under half an hour.
+- **Long recordings.** MP3 and WAV recordings of any length play at full quality and start at once: only the part around the playhead (about 20 seconds at a time) is decoded, so a 3-hour lecture takes a few MB. The first time a long recording opens, its waveform is drawn in the background (the percentage shows) and kept for next time. Other formats (m4a and the rest) are still decoded whole, so long ones are kept at a lower quality: full quality up to about 11 minutes, 16 kHz (clear speech) up to about half an hour, 12 kHz up to about 45 minutes, phone-call quality beyond that.
 - **Bluetooth headphones** add their own delay. The playhead allows for it; if it still looks early or late, adjust **Sound → Playhead timing**.
-- **Shuffle sets, crops and cuts are WAV files**, so they take more space than MP3s: about 5 MB per minute (10 MB in stereo).
+- **Shuffle sets, crops and cuts are WAV files**, so they take more space than MP3s: about 5 MB per minute (10 MB in stereo). Very long ones are written at a lower rate to fit the iPhone's memory (a cut of a 2-hour lecture comes out at 8 kHz).
 - **If Play makes no sound**, check the volume first. Some iOS 26 versions lose sound in Home Screen web apps because of an Apple bug; restarting the iPhone clears it.
 - **Opened in Safari instead of from the Home Screen**, it shares one library with any other Echo Loop app opened in Safari from the same GitHub account. Keep only one of them open at a time: a tab left open in the background holds an old copy of the library and can save it over newer changes.
-- **Updating later.** If you change any file, also change `elt-v1` to `elt-v2` (and so on) at the top of `sw.js`. The app picks up the new version the next time it's opened online.
+- **Updating later.** If you change any file, also change `elt-v2` to `elt-v3` (and so on) at the top of `sw.js`. The app picks up the new version the next time it's opened online.
 
 ## Files
 

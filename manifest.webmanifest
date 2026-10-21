@@ -2,7 +2,7 @@
   "name": "Echo Loop+ Touch",
   "short_name": "Echo Touch",
   "description": "Echo Loop+ for iPhone: an exact sound engine and a touch waveform you select, zoom and trim with your fingers. Seamless loops, flags, magic wand, shuffle sets, crop and cut. Works offline and with the screen off.",
-  "id": "./",
+  "id": "/Loop-Audio-Player-Touch/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

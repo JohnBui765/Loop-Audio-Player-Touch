@@ -129,7 +129,7 @@ canvas{display:block}
 .tb.detect[disabled]{opacity:.4}
 .caret{width:6px;height:6px;margin-top:-3px;border-right:1.7px solid currentColor;border-bottom:1.7px solid currentColor;transform:rotate(45deg);opacity:.7}
 .ovrow{flex:none;display:flex;align-items:stretch;gap:4px;padding:2px 8px 6px}
-.overview{flex:1;min-width:0;position:relative;height:36px;border-radius:9px;background:var(--wave-bg);touch-action:none}
+.overview{flex:1;min-width:0;position:relative;height:36px;border-radius:9px;background:var(--wave-bg);touch-action:none;overflow:hidden}
 .zb{flex:none;width:38px;height:36px;border-radius:9px;background:var(--fill);display:grid;place-items:center;color:var(--text)}
 .zb:active:not(:disabled){background:var(--fill-strong)}
 .tracks{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 8px 6px;touch-action:none}
@@ -137,6 +137,12 @@ canvas{display:block}
 .wave{flex:1;position:relative;min-height:110px;border-radius:10px;background:var(--wave-bg);overflow:hidden}
 .lane{flex:none;position:relative;height:30px;margin-top:4px}
 #ovCanvas,#rulerCanvas,#waveCanvas,#laneCanvas{position:absolute;left:0;top:0;width:100%;height:100%}
+/* the playhead moves on its own layer, so playing doesn't repaint the waveform */
+.ph{position:absolute;left:0;top:0;bottom:0;pointer-events:none;will-change:transform}
+.ph-w{z-index:1;width:2px;margin-left:-1px;background:var(--head)}
+.ph-w::before{content:"";position:absolute;left:-5px;top:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--head)}
+.ph-r{top:auto;width:0;height:0;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--head)}
+.ph-o{width:1px;margin-left:-.5px;background:var(--head)}
 .loupe{position:absolute;z-index:3;left:0;top:0;border-radius:14px;background:var(--loupe-bg);pointer-events:none;
   box-shadow:0 12px 30px rgba(0,0,0,.28),0 0 0 1.5px var(--loupe-ring)}
 .catchup{position:absolute;z-index:2;top:8px;right:8px;height:32px;padding:0 12px 0 9px;border-radius:16px;background:var(--accent-bg);color:#fff;
@@ -352,7 +358,7 @@ body:not(.sec) .mode-sec,body.sec .mode-normal{display:none}
 .list-more{width:34px;height:34px;border-radius:17px;display:grid;place-items:center;color:var(--accent);background:var(--fill)}
 .list-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 12px 16px}
 .list{list-style:none;margin:0;padding:0;background:var(--panel);border-radius:16px;overflow:hidden}
-.row{position:relative;display:flex;align-items:center}
+.row{position:relative;display:flex;align-items:center;content-visibility:auto;contain-intrinsic-size:auto 62px}
 .row+.row::before{content:"";position:absolute;top:0;left:56px;right:0;height:1px;transform:scaleY(.5);transform-origin:top;background:var(--sep)}
 .row-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;min-height:62px;padding:10px 0 10px 14px;text-align:left}
 .row-main:active{background:var(--fill)}
@@ -370,8 +376,8 @@ body:not(.sec) .mode-sec,body.sec .mode-normal{display:none}
 .reps:active span{transform:scale(.94)}
 .row-more{flex:none;width:44px;height:62px;display:grid;place-items:center;color:var(--text3)}
 .eq{display:inline-flex;align-items:flex-end;gap:2px;height:14px}
-.eq i{display:block;width:3px;border-radius:1.5px;background:var(--accent)}
-.eq i:nth-child(1){height:6px}.eq i:nth-child(2){height:11px}.eq i:nth-child(3){height:8px}
+.eq i{display:block;width:3px;height:14px;border-radius:1.5px;background:var(--accent);transform-origin:bottom}
+.eq i:nth-child(1){transform:scaleY(.43)}.eq i:nth-child(2){transform:scaleY(.79)}.eq i:nth-child(3){transform:scaleY(.57)}
 body.playing .eq i{animation:eq .9s ease-in-out infinite}
 body.playing .eq i:nth-child(2){animation-delay:-.35s}
 body.playing .eq i:nth-child(3){animation-delay:-.65s}
@@ -458,7 +464,7 @@ a.btn.primary{color:#fff}
 .sb-foot{flex:none;display:flex;flex-direction:column;gap:8px;padding:10px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--sep);background:var(--sheet-bg)}
 .set-cols{display:flex;flex-direction:column;gap:14px;margin-top:10px}
 .set-list{padding:4px;border-radius:14px;background:var(--sheet-card)}
-.set-group{padding:3px 0}
+.set-group{padding:3px 0;content-visibility:auto;contain-intrinsic-size:auto 160px}
 .set-group+.set-group{border-top:1px solid var(--sep)}
 .set-ghead,.set-item{display:flex;align-items:center;gap:12px;min-height:46px;padding:6px 10px;border-radius:10px;cursor:pointer}
 .set-ghead{font-size:15px;font-weight:700}
@@ -489,7 +495,7 @@ a.btn.primary{color:#fff}
 .set-banner .btn{flex:none;padding:0 14px;height:40px}
 /* flags list */
 .flist{margin-top:12px;padding:0;list-style:none;background:var(--sheet-card);border-radius:14px;overflow:hidden}
-.frow{position:relative;display:flex;align-items:center}
+.frow{position:relative;display:flex;align-items:center;content-visibility:auto;contain-intrinsic-size:auto 56px}
 .frow+.frow::before{content:"";position:absolute;top:0;left:52px;right:0;height:1px;transform:scaleY(.5);transform-origin:top;background:var(--sep)}
 .frow.active{background:var(--flag-tint)}
 .frow-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 4px 8px 14px;text-align:left}
@@ -520,11 +526,18 @@ body.drop::after{content:"Drop audio to import";position:fixed;inset:12px;z-inde
   .lib-head{height:48px}
   .lib-head h2{font-size:24px}
 }
-@keyframes eq{0%,100%{height:4px}50%{height:14px}}
+@keyframes eq{0%,100%{transform:scaleY(.29)}50%{transform:scaleY(1)}}
 @keyframes pulse{50%{opacity:.35}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fade{from{opacity:0}}
 @keyframes rise{from{transform:translateY(100%)}}
+@keyframes sink{to{transform:translateY(100%)}}
+@keyframes popout{to{transform:scale(.96);opacity:0}}
+@keyframes fadeout{to{opacity:0}}
+.sheet-wrap.closing{pointer-events:none}
+.sheet-wrap.closing .sheet{animation:sink .22s cubic-bezier(.4,0,1,1) forwards}
+.sheet-wrap.closing.dialog .sheet{animation:popout .16s ease-in forwards}
+.sheet-wrap.closing .backdrop{animation:fadeout .22s forwards}
 @keyframes pop{from{transform:scale(.94);opacity:0}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -550,8 +563,8 @@ body.drop::after{content:"Drop audio to import";position:fixed;inset:12px;z-inde
   <section class="np" id="np" aria-label="Now playing">
     <button class="lib-l" id="libBtnL" type="button" aria-label="Library"><span data-icon="list" data-size="20"></span></button>
     <div class="np-text">
-      <div class="np-title" id="npTitle">No recordings yet</div>
-      <div class="np-sub" id="npSub">Tap + to import audio</div>
+      <div class="np-title" id="npTitle"></div>
+      <div class="np-sub" id="npSub"></div>
     </div>
     <div class="count-pill" id="countPill" hidden><span id="countIcon"></span><span id="countText">1</span></div>
     <div class="clock" aria-live="off"><span class="t-now" id="tCur">0:00.0</span><span class="t-dur" id="tDur">0:00</span></div>
@@ -571,16 +584,17 @@ body.drop::after{content:"Drop audio to import";position:fixed;inset:12px;z-inde
       <button class="tb icon" id="moreBtn" type="button" aria-label="More"><span data-icon="more" data-size="20"></span></button>
     </div>
     <div class="ovrow">
-      <div class="overview" id="overview" aria-label="Whole recording. Drag the box to move around."><canvas id="ovCanvas" aria-hidden="true"></canvas></div>
+      <div class="overview" id="overview" aria-label="Whole recording. Drag the box to move around."><canvas id="ovCanvas" aria-hidden="true"></canvas><div class="ph ph-o" id="phOv" hidden></div></div>
       <button class="zb" id="zoomOut" type="button" aria-label="Zoom out"><span data-icon="zoomOut" data-size="20"></span></button>
       <button class="zb" id="zoomIn" type="button" aria-label="Zoom in"><span data-icon="zoomIn" data-size="20"></span></button>
       <button class="zb" id="zoomSec" type="button" aria-label="Zoom to the section"><span data-icon="fitSel" data-size="20"></span></button>
       <button class="zb" id="zoomFit" type="button" aria-label="Show the whole recording"><span data-icon="fitAll" data-size="20"></span></button>
     </div>
     <div class="tracks" id="tracks">
-      <div class="ruler" id="ruler"><canvas id="rulerCanvas" aria-hidden="true"></canvas></div>
+      <div class="ruler" id="ruler"><canvas id="rulerCanvas" aria-hidden="true"></canvas><div class="ph ph-r" id="phRuler" hidden></div></div>
       <div class="wave" id="wave" role="application" aria-label="Waveform">
         <canvas id="waveCanvas" aria-hidden="true"></canvas>
+        <div class="ph ph-w" id="phWave" hidden></div>
         <canvas class="loupe" id="loupe" aria-hidden="true" hidden></canvas>
         <button class="catchup" id="catchUp" type="button" hidden><span data-icon="follow" data-size="17"></span>Follow</button>
         <div class="wave-msg" id="waveMsg" hidden></div>
@@ -711,7 +725,7 @@ const PEAK_BPS = 100;                                  // snapping envelope: 10 
 // so this app has its own library there; in one browser on one site the three apps would share it.
 const DB_NAME = 'echo-loop-plus';
 const LS_KEY = 'echoLoopTouch.v1', LS_PHONE = 'echoLoopPlus.v1';
-const WAVE_DB = 'echo-loop-touch', WAVE_V = 1;         // detailed waveforms are cached in a database of their own
+const WAVE_DB = 'echo-loop-touch', WAVE_V = 2;         // detailed waveforms are cached in a database of their own
 const WAVE_KEEP = 2;                                   // detailed waveforms kept in memory at once
 const MIN_SPAN = 0.02;                                 // seconds across the whole view at the closest zoom
 // iPhone memory: the sound engine keeps at most this many samples of one recording (64 MB). Long recordings get a
@@ -790,7 +804,12 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 const svg = (name, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
-function iconEl(name, size = 22) { const s = document.createElement('span'); s.className = 'ico'; s.innerHTML = svg(name, size); return s; }
+const iconCache = new Map();
+function iconEl(name, size = 22) {                     // parsed once per kind, then cloned
+  let s = iconCache.get(name + size);
+  if (!s) { s = document.createElement('span'); s.className = 'ico'; s.innerHTML = svg(name, size); iconCache.set(name + size, s); }
+  return s.cloneNode(true);
+}
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -886,8 +905,13 @@ const db = {
   allMeta() { return this.tx('meta', 'readonly', (t, set) => { const r = t.objectStore('meta').getAll(); r.onsuccess = () => set(r.result || []); }); },
   allBlobs() {
     return this.tx('blobs', 'readonly', (t, set) => {
-      const map = new Map(); set(map);
-      const r = t.objectStore('blobs').openCursor();
+      const st = t.objectStore('blobs'), map = new Map(); set(map);
+      if (st.getAllKeys) {                               // keys and values in two requests (the keys arrive first)
+        const k = st.getAllKeys(), v = st.getAll();
+        v.onsuccess = () => { const ks = k.result || []; (v.result || []).forEach((b, i) => map.set(ks[i], b)); };
+        return;
+      }
+      const r = st.openCursor();
       r.onsuccess = () => { const c = r.result; if (c) { map.set(c.key, c.value); c.continue(); } };
     });
   },
@@ -990,8 +1014,9 @@ let lastPersist = 0;
 function persistSoon() { const n = Date.now(); if (n - lastPersist > 4000) { lastPersist = n; persist(); } }
 
 /* ================= waveform summaries (run in a background worker; also callable directly) ================= */
-// min / max / loudness at several zoom levels, a 10 ms envelope for snapping and a 5 ms loudness curve for finding sound blocks.
-function elpBuildWave(rate, raw) {
+// min / max / loudness at several zoom levels, a 10 ms envelope for snapping and a 5 ms loudness curve for finding sound blocks
+// (the last two come ready-made when the waveform pass measured them on the recording itself).
+function elpBuildWave(rate, raw, pre) {
   const LEVEL_BINS = [32, 256, 2048, 16384], PEAK_BPS = 100;
   const N = raw.length;
   if (!N || !(rate > 0)) throw new Error('empty');
@@ -1024,6 +1049,7 @@ function elpBuildWave(rate, raw) {
   mags.sort();
   const ref = Math.max(300, mags[Math.floor((mags.length - 1) * 0.998)] || 0);
   const gain = Math.min(40, Math.max(0.5, 0.92 * 32767 / ref));
+  if (pre && pre.env && pre.rms5) return { rate, len: N, raw, levels, gain, env: pre.env, rms5: pre.rms5, rmsRate: pre.rmsRate };
   const per = rate / PEAK_BPS, en = Math.max(1, Math.ceil(N / per)), env0 = new Float32Array(en);
   for (let i = 0; i < en; i++) {
     const k0 = Math.floor(i * per), k1 = Math.min(N, Math.floor((i + 1) * per));
@@ -1044,9 +1070,9 @@ function elpBuildWave(rate, raw) {
 }
 function elpWaveWorkerShell() {
   self.onmessage = (e) => {
-    const { job, rate, raw } = e.data;
+    const { job, rate, raw, pre } = e.data;
     try {
-      const w = elpBuildWave(rate, raw);                  // eslint-disable-line no-undef
+      const w = elpBuildWave(rate, raw, pre);             // eslint-disable-line no-undef
       const tr = [w.raw.buffer, w.env.buffer, w.rms5.buffer];
       for (const L of w.levels) tr.push(L.mn.buffer, L.mx.buffer, L.rm.buffer);
       self.postMessage({ job, ok: true, w }, tr);
@@ -1076,7 +1102,7 @@ const engine = {
 };
 // The same code as worklet.js, filled in when index.html is built. Used only when worklet.js can't be loaded
 // (a computer opening index.html straight from a folder); iPhone always uses the file.
-const WORKLET_SRC = "// Echo Loop+ Touch: the sound engine. It runs on the iPhone's audio thread (an AudioWorklet).\n// It lives in its own file because WebKit \u2014 the engine inside every browser on iPhone \u2014 refuses\n// audio-thread code handed over as a \"blob:\" address, which is how the desktop app loads it.\n// Same engine as Echo Loop+ Desktop 2: seamless loops, 5 ms fades, slow-down that keeps the voice's pitch.\n/* global sampleRate, currentFrame, AudioWorkletProcessor, registerProcessor */\nconst FADE_MS = 5;                                  // every start, stop, jump and loop seam fades over 5 ms\nfunction herm(x, t) {                               // 4-point cubic interpolation (resampling)\n  const c1 = 0.5 * (x[2] - x[0]), c2 = x[0] - 2.5 * x[1] + 2 * x[2] - 0.5 * x[3], c3 = 0.5 * (x[3] - x[0]) + 1.5 * (x[1] - x[2]);\n  return ((c3 * t + c2) * t + c1) * t + x[1];\n}\nclass ElpPlayer extends AudioWorkletProcessor {\n  constructor(options) {\n    super();\n    this.sr = sampleRate;\n    this.ch = null; this.nch = 0; this.len = 0; this.srate = sampleRate; this.step = 1; this.id = null;\n    this.playing = false; this.stopping = false; this.rate = 1; this.mode = 0;   // mode 0: straight read, 1: time-stretch\n    this.pos = 0; this.lastP = 0;\n    this.looping = false; this.la = 0; this.lb = 0; this.left = -1; this.loopGen = 0;   // section loop; left = repeats still allowed (-1 = endless)\n    this.fileLoop = false;\n    this.gain = 0; this.target = 0;\n    this.fadeN = Math.max(16, Math.round(this.sr * FADE_MS / 1000)); this.fadeStep = 1 / this.fadeN;\n    this.jumpTo = -1; this.jumpKind = ''; this.jumpSeq = 0;\n    this.repN = Math.round(this.sr * 0.02); this.rep = 0;\n    this.hL = new Float32Array(4); this.hR = new Float32Array(4); this.hP = new Float64Array(4); this.ph = 0; this.primed = false;\n    this.sL = 0; this.sR = 0; this.sP = 0; this.oL = 0; this.oR = 0; this.oP = 0;\n    this.N = 0; this.Hs = 0; this.D = 0; this.win = null; this.accL = null; this.accR = null;\n    this.fL = null; this.fR = null; this.fP = null; this.fHead = 0; this.fLen = 0; this.sBuf = null; this.nBuf = null;\n    this.ax = 0; this.prevNat = 0; this.havePrev = false;\n    this.port.onmessage = (e) => this.onMsg(e.data);\n    const o = options && options.processorOptions;\n    if (o && Array.isArray(o.init)) for (const m of o.init) this.onMsg(m);\n  }\n  post(m) { m.id = this.id; this.port.postMessage(m); }   // every message says which recording it is about\n  setupStretch() {\n    const sr = this.srate;\n    let N = Math.round(sr * 0.032); N += N & 1;                                   // 32 ms frames, 50 % overlap\n    this.N = N; this.Hs = N >> 1; this.D = Math.round(sr * 0.010);                // search \u00b110 ms for the best join\n    this.win = new Float32Array(N);\n    for (let j = 0; j < N; j++) this.win[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / N);\n    this.accL = new Float32Array(N); this.accR = new Float32Array(N);\n    this.fL = new Float32Array(this.Hs); this.fR = new Float32Array(this.Hs); this.fP = new Float64Array(this.Hs);\n    this.sBuf = new Float32Array(2 * this.D + N); this.nBuf = new Float32Array(N);\n  }\n  resetAt(to) {\n    this.pos = to; this.lastP = to;\n    this.ax = to; this.havePrev = false; this.fLen = 0;\n    if (this.accL) { this.accL.fill(0); this.accR.fill(0); }\n    this.primed = false; this.ph = 0;\n  }\n  schedule(to, kind) { this.jumpTo = Math.max(0, Math.min(this.len, Math.round(to))); this.jumpKind = kind; this.target = 0; }\n  doJump(frame) {\n    const to = this.jumpTo, kind = this.jumpKind;\n    this.jumpTo = -1;\n    this.mode = this.rate === 1 ? 0 : 1;                                          // a pending speed change takes effect here\n    this.resetAt(to);\n    if (kind === 'wrap' && this.left > 0) this.left--;\n    this.post({ type: 'jump', kind, frame, pos: to / this.srate, rate: this.mode ? this.rate : 1, seq: kind === 'seek' ? this.jumpSeq : 0, gen: kind === 'wrap' ? this.loopGen : 0 });\n    if (this.playing && !this.stopping) this.target = 1;\n  }\n  // Waveform-similarity overlap-add: slows speech down or speeds it up without changing the voice's pitch.\n  bestDelta(xk, nat) {\n    const D = this.D, N = this.N, len = this.len, c0 = this.ch[0], c1 = this.nch > 1 ? this.ch[1] : null, sb = this.sBuf, nb = this.nBuf;\n    const base0 = xk - D, span = 2 * D + N;\n    for (let i = 0; i < span; i++) { const k = base0 + i; sb[i] = k >= 0 && k < len ? (c1 ? c0[k] + c1[k] : c0[k]) : 0; }\n    for (let j = 0; j < N; j++) { const k = nat + j; nb[j] = k >= 0 && k < len ? (c1 ? c0[k] + c1[k] : c0[k]) : 0; }\n    let best = 0, bestV = -Infinity;\n    for (let d = 0; d <= 2 * D; d += 4) {\n      let acc = 0;\n      for (let j = 0; j < N; j += 8) acc += sb[d + j] * nb[j];\n      if (acc > bestV) { bestV = acc; best = d; }\n    }\n    const lo = Math.max(0, best - 4), hi = Math.min(2 * D, best + 4);\n    let fine = best; bestV = -Infinity;\n    for (let d = lo; d <= hi; d++) {\n      let acc = 0;\n      for (let j = 0; j < N; j += 2) acc += sb[d + j] * nb[j];\n      if (acc > bestV) { bestV = acc; fine = d; }\n    }\n    return fine - D;\n  }\n  stretchFrame() {\n    const N = this.N, Hs = this.Hs, len = this.len, w = this.win, aL = this.accL, aR = this.accR;\n    const c0 = this.ch[0], c1 = this.nch > 1 ? this.ch[1] : null;\n    const xk = Math.round(this.ax), first = !this.havePrev;\n    const s = first ? xk : xk + this.bestDelta(xk, this.prevNat);\n    for (let j = 0; j < N; j++) {\n      const k = s + j;\n      // the first frame after a jump starts at full level (the 5 ms gain ramp keeps it click-free), so onsets stay crisp\n      if (k >= 0 && k < len) { const v = first && j < Hs ? 1 : w[j]; aL[j] += v * c0[k]; if (c1) aR[j] += v * c1[k]; }\n    }\n    // Positions follow the nominal timeline (exactly `rate` per sample), so loops keep an exact length and the\n    // playhead moves evenly; the audio itself is aligned within \u00b110 ms of it.\n    const sc = 1 / 32768, ax = this.ax, r = this.rate;\n    for (let j = 0; j < Hs; j++) { const l = aL[j] * sc; this.fL[j] = l; this.fR[j] = c1 ? aR[j] * sc : l; this.fP[j] = ax + j * r; }\n    aL.copyWithin(0, Hs); aL.fill(0, N - Hs);\n    if (c1) { aR.copyWithin(0, Hs); aR.fill(0, N - Hs); }\n    this.fHead = 0; this.fLen = Hs;\n    this.prevNat = s + Hs; this.havePrev = true;\n    this.ax += Hs * this.rate;\n  }\n  streamNext() {                                    // next sample at the recording's own sample rate\n    if (this.mode === 0) {\n      const i = this.pos;\n      if (i >= 0 && i < this.len) { const a = this.ch[0][i] / 32768; this.sL = a; this.sR = this.nch > 1 ? this.ch[1][i] / 32768 : a; }\n      else { this.sL = 0; this.sR = 0; }\n      this.sP = i; this.pos = i + 1;\n      return;\n    }\n    if (this.fLen === 0) this.stretchFrame();\n    const k = this.fHead;\n    this.sL = this.fL[k]; this.sR = this.fR[k]; this.sP = this.fP[k];\n    this.fHead = k + 1; this.fLen--;\n  }\n  outNext() {                                       // next sample at the sound card's rate\n    if (this.step === 1) { this.streamNext(); this.oL = this.sL; this.oR = this.sR; this.oP = this.sP; return; }\n    const hL = this.hL, hR = this.hR, hP = this.hP;\n    if (!this.primed) {\n      this.streamNext(); hL[0] = hL[1] = this.sL; hR[0] = hR[1] = this.sR; hP[0] = hP[1] = this.sP;\n      this.streamNext(); hL[2] = this.sL; hR[2] = this.sR; hP[2] = this.sP;\n      this.streamNext(); hL[3] = this.sL; hR[3] = this.sR; hP[3] = this.sP;\n      this.primed = true; this.ph = 0;\n    }\n    const t = this.ph;\n    this.oL = herm(hL, t); this.oR = herm(hR, t); this.oP = hP[1] + t * (hP[2] - hP[1]);\n    this.ph += this.step;\n    while (this.ph >= 1) {\n      this.ph -= 1;\n      hL[0] = hL[1]; hL[1] = hL[2]; hL[2] = hL[3];\n      hR[0] = hR[1]; hR[1] = hR[2]; hR[2] = hR[3];\n      hP[0] = hP[1]; hP[1] = hP[2]; hP[2] = hP[3];\n      this.streamNext(); hL[3] = this.sL; hR[3] = this.sR; hP[3] = this.sP;\n    }\n  }\n  onMsg(m) {\n    switch (m.t) {\n      case 'load':\n        this.ch = m.ch; this.nch = m.ch.length; this.len = m.len; this.srate = m.srate; this.step = m.srate / this.sr; this.id = m.id;\n        this.setupStretch();\n        this.playing = false; this.stopping = false; this.gain = 0; this.target = 0; this.jumpTo = -1; this.looping = false;\n        this.mode = this.rate === 1 ? 0 : 1;\n        this.resetAt(Math.max(0, Math.min(this.len, Math.round((m.pos || 0) * this.srate))));\n        this.post({ type: 'loaded', id: m.id });\n        break;\n      case 'unload': this.ch = null; this.playing = false; this.len = 0; this.id = null; break;\n      case 'play':\n        if (!this.ch) break;\n        this.playing = true; this.stopping = false;\n        if (this.jumpTo < 0) this.target = 1;\n        this.post({ type: 'playing', frame: currentFrame, pos: this.lastP / this.srate, rate: this.mode ? this.rate : 1 });\n        break;\n      case 'pause': if (this.playing) { this.stopping = true; this.target = 0; } break;\n      case 'seek': {\n        if (!this.ch) break;\n        this.jumpSeq = m.seq || 0;\n        const to = Math.round(m.pos * this.srate);\n        if (this.playing && !this.stopping && this.gain > 0) this.schedule(to, 'seek');\n        else { this.jumpTo = Math.max(0, Math.min(this.len, to)); this.jumpKind = 'seek'; this.doJump(currentFrame); }\n        break;\n      }\n      case 'rate': {\n        const r = m.r, wasStraight = this.mode === 0, oldRate = wasStraight ? 1 : this.rate;\n        this.rate = r;\n        if (wasStraight !== (r === 1) && this.ch) {\n          if (this.playing && this.gain > 0 && this.jumpTo < 0) {\n            // switch between straight playback and time-stretching where the fade-out ends, so nothing repeats\n            this.schedule(this.lastP + this.fadeN * this.step * oldRate, 'mode');\n          } else if (this.jumpTo < 0) { this.mode = r === 1 ? 0 : 1; this.resetAt(Math.round(this.lastP)); }\n        }\n        break;\n      }\n      case 'loop': this.looping = true; this.la = Math.round(m.a * this.srate); this.lb = Math.round(m.b * this.srate); this.left = m.left; this.loopGen = m.gen || 0; break;\n      case 'noloop': this.looping = false; break;\n      case 'fileLoop': this.fileLoop = !!m.on; break;\n    }\n  }\n  process(inputs, outputs) {\n    const out = outputs[0], L = out[0], R = out[1] || null, n = L.length;\n    if (!this.ch) { L.fill(0); if (R) R.fill(0); return true; }\n    for (let i = 0; i < n; i++) {\n      if (this.gain < this.target) { this.gain += this.fadeStep; if (this.gain > this.target) this.gain = this.target; }\n      else if (this.gain > this.target) { this.gain -= this.fadeStep; if (this.gain < this.target) this.gain = this.target; }\n      if (this.gain <= 0) {\n        if (this.jumpTo >= 0) this.doJump(currentFrame + i);\n        if (this.stopping) { this.stopping = false; this.playing = false; this.post({ type: 'paused', frame: currentFrame + i, pos: this.lastP / this.srate }); }\n      }\n      if (!this.playing) { L[i] = 0; if (R) R[i] = 0; continue; }\n      this.outNext();\n      const p = this.oP;\n      if (this.jumpTo < 0 && !this.stopping) {\n        const adv = this.fadeN * this.step * (this.mode ? this.rate : 1);       // how far the recording moves during a fade\n        if (this.looping && p >= this.lb - adv) {\n          if (this.left !== 0) this.schedule(this.la, 'wrap');\n          else { this.looping = false; this.post({ type: 'loopdone', frame: currentFrame + i, pos: p / this.srate, gen: this.loopGen }); }\n        } else if (p >= this.len - adv) {\n          if (this.fileLoop) this.schedule(0, 'filewrap');\n          else if (p >= this.len) {\n            this.playing = false; this.gain = 0; this.target = 0; this.lastP = this.len;\n            this.post({ type: 'ended', frame: currentFrame + i, pos: this.len / this.srate });\n            L[i] = 0; if (R) R[i] = 0;\n            continue;\n          }\n        }\n      }\n      this.lastP = p;\n      const g = this.gain;\n      L[i] = this.oL * g; if (R) R[i] = this.oR * g;\n      if (++this.rep >= this.repN) { this.rep = 0; this.post({ type: 'pos', frame: currentFrame + i, pos: p / this.srate, rate: this.mode ? this.rate : 1 }); }\n    }\n    return true;\n  }\n}\nregisterProcessor('elp-player', ElpPlayer);\n";
+const WORKLET_SRC = "// Echo Loop+ Touch: the sound engine. It runs on the iPhone's audio thread (an AudioWorklet).\n// It lives in its own file because WebKit \u2014 the engine inside every browser on iPhone \u2014 refuses\n// audio-thread code handed over as a \"blob:\" address, which is how the desktop app loads it.\n// Same engine as Echo Loop+ Desktop 2: seamless loops, 5 ms fades, slow-down that keeps the voice's pitch.\n// The recording arrives in pages of 2^20 samples, decoded around the playhead. When the sound is about to reach a\n// page that isn't here yet, it fades out, asks for it, and carries on the moment it arrives.\n/* global sampleRate, currentFrame, AudioWorkletProcessor, registerProcessor */\nconst FADE_MS = 5;                                  // every start, stop, jump and loop seam fades over 5 ms\nconst PAGE_SHIFT = 20, PAGE_MASK = (1 << PAGE_SHIFT) - 1;   // the same page size as index.html\nfunction herm(x, t) {                               // 4-point cubic interpolation (resampling)\n  const c1 = 0.5 * (x[2] - x[0]), c2 = x[0] - 2.5 * x[1] + 2 * x[2] - 0.5 * x[3], c3 = 0.5 * (x[3] - x[0]) + 1.5 * (x[1] - x[2]);\n  return ((c3 * t + c2) * t + c1) * t + x[1];\n}\nclass ElpPlayer extends AudioWorkletProcessor {\n  constructor(options) {\n    super();\n    this.sr = sampleRate;\n    this.pg = null; this.nch = 0; this.len = 0; this.srate = sampleRate; this.step = 1; this.id = null;   // pg: pages per channel\n    this.playing = false; this.stopping = false; this.rate = 1; this.mode = 0;   // mode 0: straight read, 1: time-stretch\n    this.pos = 0; this.lastP = 0;\n    this.looping = false; this.la = 0; this.lb = 0; this.left = -1; this.loopGen = 0;   // section loop; left = repeats still allowed (-1 = endless)\n    this.fileLoop = false;\n    this.gain = 0; this.target = 0;\n    this.fadeN = Math.max(16, Math.round(this.sr * FADE_MS / 1000)); this.fadeStep = 1 / this.fadeN;\n    this.jumpTo = -1; this.jumpKind = ''; this.jumpSeq = 0;\n    this.repN = Math.round(this.sr * 0.1); this.rep = 0;                         // where the sound is: 10 reports a second\n    this.wait = false; this.held = false; this.asked = -1; this.missing = -1; this.waitN = 0; this.ahead = 0;\n    this.hL = new Float32Array(4); this.hR = new Float32Array(4); this.hP = new Float64Array(4); this.ph = 0; this.primed = false;\n    this.sL = 0; this.sR = 0; this.sP = 0; this.oL = 0; this.oR = 0; this.oP = 0;\n    this.N = 0; this.Hs = 0; this.D = 0; this.win = null; this.accL = null; this.accR = null;\n    this.fL = null; this.fR = null; this.fP = null; this.fHead = 0; this.fLen = 0; this.sBuf = null; this.nBuf = null;\n    this.ax = 0; this.prevNat = 0; this.havePrev = false;\n    this.port.onmessage = (e) => this.onMsg(e.data);\n    const o = options && options.processorOptions;\n    if (o && Array.isArray(o.init)) for (const m of o.init) this.onMsg(m);\n  }\n  post(m) { m.id = this.id; this.port.postMessage(m); }   // every message says which recording it is about\n  at(c, k) { const p = this.pg[c][k >>> PAGE_SHIFT]; return p === undefined ? 0 : p[k & PAGE_MASK]; }   // 0 until its page arrives\n  // Is everything the next stretch of sound needs already here? Pages are far longer than this window.\n  ready() {\n    const at = this.mode ? Math.round(this.ax) : this.pos;\n    const lo = Math.max(0, at - this.N - 2 * this.D), hi = Math.min(this.len - 1, at + this.N + 2 * this.D + this.ahead);\n    const p0 = this.pg[0];\n    for (let k = lo >>> PAGE_SHIFT, e = hi >>> PAGE_SHIFT; k <= e && hi >= lo; k++) if (p0[k] === undefined) { this.missing = k; return false; }\n    return true;\n  }\n  // The sound is about to run into a page that hasn't arrived: fade out, hold the place, and ask for it.\n  startWait() {\n    this.wait = true; this.target = 0; this.waitN = 0;\n    if (this.missing !== this.asked) { this.asked = this.missing; this.post({ type: 'need', page: this.missing }); }\n  }\n  endWait() { this.wait = false; this.asked = -1; if (this.playing && !this.stopping && this.jumpTo < 0) this.target = 1; }\n  setupStretch() {\n    const sr = this.srate;\n    let N = Math.round(sr * 0.032); N += N & 1;                                   // 32 ms frames, 50 % overlap\n    this.N = N; this.Hs = N >> 1; this.D = Math.round(sr * 0.010);                // search \u00b110 ms for the best join\n    this.win = new Float32Array(N);\n    for (let j = 0; j < N; j++) this.win[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / N);\n    this.accL = new Float32Array(N); this.accR = new Float32Array(N);\n    this.fL = new Float32Array(this.Hs); this.fR = new Float32Array(this.Hs); this.fP = new Float64Array(this.Hs);\n    this.sBuf = new Float32Array(2 * this.D + N); this.nBuf = new Float32Array(N);\n  }\n  resetAt(to) {\n    this.pos = to; this.lastP = to;\n    this.ax = to; this.havePrev = false; this.fLen = 0;\n    if (this.accL) { this.accL.fill(0); this.accR.fill(0); }\n    this.primed = false; this.ph = 0;\n  }\n  schedule(to, kind) { this.jumpTo = Math.max(0, Math.min(this.len, Math.round(to))); this.jumpKind = kind; this.target = 0; }\n  doJump(frame) {\n    const to = this.jumpTo, kind = this.jumpKind;\n    this.jumpTo = -1;\n    this.mode = this.rate === 1 ? 0 : 1;                                          // a pending speed change takes effect here\n    this.resetAt(to);\n    if (kind === 'wrap' && this.left > 0) this.left--;\n    this.post({ type: 'jump', kind, frame, pos: to / this.srate, rate: this.mode ? this.rate : 1, seq: kind === 'seek' ? this.jumpSeq : 0, gen: kind === 'wrap' ? this.loopGen : 0 });\n    if (this.playing && !this.stopping) { if (this.ready()) { this.wait = false; this.target = 1; } else this.startWait(); }\n  }\n  // Waveform-similarity overlap-add: slows speech down or speeds it up without changing the voice's pitch.\n  bestDelta(xk, nat) {\n    const D = this.D, N = this.N, len = this.len, st = this.nch > 1, sb = this.sBuf, nb = this.nBuf;\n    const base0 = xk - D, span = 2 * D + N;\n    for (let i = 0; i < span; i++) { const k = base0 + i; sb[i] = k >= 0 && k < len ? (st ? this.at(0, k) + this.at(1, k) : this.at(0, k)) : 0; }\n    for (let j = 0; j < N; j++) { const k = nat + j; nb[j] = k >= 0 && k < len ? (st ? this.at(0, k) + this.at(1, k) : this.at(0, k)) : 0; }\n    let best = 0, bestV = -Infinity;\n    for (let d = 0; d <= 2 * D; d += 4) {\n      let acc = 0;\n      for (let j = 0; j < N; j += 8) acc += sb[d + j] * nb[j];\n      if (acc > bestV) { bestV = acc; best = d; }\n    }\n    const lo = Math.max(0, best - 4), hi = Math.min(2 * D, best + 4);\n    let fine = best; bestV = -Infinity;\n    for (let d = lo; d <= hi; d++) {\n      let acc = 0;\n      for (let j = 0; j < N; j += 2) acc += sb[d + j] * nb[j];\n      if (acc > bestV) { bestV = acc; fine = d; }\n    }\n    return fine - D;\n  }\n  stretchFrame() {\n    const N = this.N, Hs = this.Hs, len = this.len, w = this.win, aL = this.accL, aR = this.accR, st = this.nch > 1;\n    const xk = Math.round(this.ax), first = !this.havePrev;\n    const s = first ? xk : xk + this.bestDelta(xk, this.prevNat);\n    for (let j = 0; j < N; j++) {\n      const k = s + j;\n      // the first frame after a jump starts at full level (the 5 ms gain ramp keeps it click-free), so onsets stay crisp\n      if (k >= 0 && k < len) { const v = first && j < Hs ? 1 : w[j]; aL[j] += v * this.at(0, k); if (st) aR[j] += v * this.at(1, k); }\n    }\n    // Positions follow the nominal timeline (exactly `rate` per sample), so loops keep an exact length and the\n    // playhead moves evenly; the audio itself is aligned within \u00b110 ms of it.\n    const sc = 1 / 32768, ax = this.ax, r = this.rate;\n    for (let j = 0; j < Hs; j++) { const l = aL[j] * sc; this.fL[j] = l; this.fR[j] = st ? aR[j] * sc : l; this.fP[j] = ax + j * r; }\n    aL.copyWithin(0, Hs); aL.fill(0, N - Hs);\n    if (st) { aR.copyWithin(0, Hs); aR.fill(0, N - Hs); }\n    this.fHead = 0; this.fLen = Hs;\n    this.prevNat = s + Hs; this.havePrev = true;\n    this.ax += Hs * this.rate;\n  }\n  streamNext() {                                    // next sample at the recording's own sample rate\n    if (this.mode === 0) {\n      const i = this.pos;\n      if (i >= 0 && i < this.len) { const a = this.at(0, i) / 32768; this.sL = a; this.sR = this.nch > 1 ? this.at(1, i) / 32768 : a; }\n      else { this.sL = 0; this.sR = 0; }\n      this.sP = i; this.pos = i + 1;\n      return;\n    }\n    if (this.fLen === 0) this.stretchFrame();\n    const k = this.fHead;\n    this.sL = this.fL[k]; this.sR = this.fR[k]; this.sP = this.fP[k];\n    this.fHead = k + 1; this.fLen--;\n  }\n  outNext() {                                       // next sample at the sound card's rate\n    if (this.step === 1) { this.streamNext(); this.oL = this.sL; this.oR = this.sR; this.oP = this.sP; return; }\n    const hL = this.hL, hR = this.hR, hP = this.hP;\n    if (!this.primed) {\n      this.streamNext(); hL[0] = hL[1] = this.sL; hR[0] = hR[1] = this.sR; hP[0] = hP[1] = this.sP;\n      this.streamNext(); hL[2] = this.sL; hR[2] = this.sR; hP[2] = this.sP;\n      this.streamNext(); hL[3] = this.sL; hR[3] = this.sR; hP[3] = this.sP;\n      this.primed = true; this.ph = 0;\n    }\n    const t = this.ph;\n    this.oL = herm(hL, t); this.oR = herm(hR, t); this.oP = hP[1] + t * (hP[2] - hP[1]);\n    this.ph += this.step;\n    while (this.ph >= 1) {\n      this.ph -= 1;\n      hL[0] = hL[1]; hL[1] = hL[2]; hL[2] = hL[3];\n      hR[0] = hR[1]; hR[1] = hR[2]; hR[2] = hR[3];\n      hP[0] = hP[1]; hP[1] = hP[2]; hP[2] = hP[3];\n      this.streamNext(); hL[3] = this.sL; hR[3] = this.sR; hP[3] = this.sP;\n    }\n  }\n  onMsg(m) {\n    switch (m.t) {\n      case 'load':\n        this.pg = [[], []]; this.nch = m.nch; this.len = m.len; this.srate = m.srate; this.step = m.srate / this.sr; this.id = m.id;\n        this.ahead = Math.ceil(this.fadeN * this.step * 2) + 64;                 // a fade at the fastest speed\n        this.wait = false; this.held = false; this.asked = -1; this.waitN = 0;\n        this.setupStretch();\n        this.playing = false; this.stopping = false; this.gain = 0; this.target = 0; this.jumpTo = -1; this.looping = false;\n        this.mode = this.rate === 1 ? 0 : 1;\n        this.resetAt(Math.max(0, Math.min(this.len, Math.round((m.pos || 0) * this.srate))));\n        this.post({ type: 'loaded', id: m.id });\n        break;\n      case 'page':\n        if (!this.pg || m.id !== this.id) break;\n        this.pg[0][m.k] = m.ch[0]; if (this.nch > 1) this.pg[1][m.k] = m.ch[1] || m.ch[0];\n        if (this.wait && this.ready()) this.endWait();\n        break;\n      case 'drop':\n        if (!this.pg || m.id !== this.id) break;\n        for (const k of m.ks) { this.pg[0][k] = undefined; this.pg[1][k] = undefined; }\n        break;\n      case 'unload': this.pg = null; this.playing = false; this.len = 0; this.id = null; this.wait = false; break;\n      case 'play':\n        if (!this.pg) break;\n        this.playing = true; this.stopping = false;\n        if (this.jumpTo < 0) this.target = 1;\n        this.post({ type: 'playing', frame: currentFrame, pos: this.lastP / this.srate, rate: this.mode ? this.rate : 1 });\n        break;\n      case 'pause': if (this.playing) { this.stopping = true; this.target = 0; } break;\n      case 'seek': {\n        if (!this.pg) break;\n        this.jumpSeq = m.seq || 0;\n        const to = Math.round(m.pos * this.srate);\n        if (this.playing && !this.stopping && this.gain > 0) this.schedule(to, 'seek');\n        else { this.jumpTo = Math.max(0, Math.min(this.len, to)); this.jumpKind = 'seek'; this.doJump(currentFrame); }\n        break;\n      }\n      case 'rate': {\n        const r = m.r, wasStraight = this.mode === 0, oldRate = wasStraight ? 1 : this.rate;\n        this.rate = r;\n        if (wasStraight !== (r === 1) && this.pg) {\n          if (this.playing && this.gain > 0 && this.jumpTo < 0) {\n            // switch between straight playback and time-stretching where the fade-out ends, so nothing repeats\n            this.schedule(this.lastP + this.fadeN * this.step * oldRate, 'mode');\n          } else if (this.jumpTo < 0) { this.mode = r === 1 ? 0 : 1; this.resetAt(Math.round(this.lastP)); }\n        } else if (this.pg && this.playing && !this.held && this.mode) {\n          this.post({ type: 'pos', frame: currentFrame, pos: this.lastP / this.srate, rate: this.rate });   // the new speed, at once\n        }\n        break;\n      }\n      case 'loop': this.looping = true; this.la = Math.round(m.a * this.srate); this.lb = Math.round(m.b * this.srate); this.left = m.left; this.loopGen = m.gen || 0; break;\n      case 'noloop': this.looping = false; break;\n      case 'fileLoop': this.fileLoop = !!m.on; break;\n    }\n  }\n  process(inputs, outputs) {\n    const out = outputs[0], L = out[0], R = out[1] || null, n = L.length;\n    if (!this.pg) { L.fill(0); if (R) R.fill(0); return true; }\n    if (this.playing && !this.stopping && this.jumpTo < 0) {\n      if (this.ready()) { if (this.wait) this.endWait(); }\n      else if (!this.wait) this.startWait();\n      else { this.target = 0; if ((this.waitN += n) >= this.sr) { this.asked = -1; this.startWait(); } }   // still missing after a second: ask again\n    }\n    for (let i = 0; i < n; i++) {\n      if (this.gain < this.target) { this.gain += this.fadeStep; if (this.gain > this.target) this.gain = this.target; }\n      else if (this.gain > this.target) { this.gain -= this.fadeStep; if (this.gain < this.target) this.gain = this.target; }\n      if (this.gain <= 0) {\n        if (this.jumpTo >= 0) this.doJump(currentFrame + i);\n        if (this.stopping) { this.stopping = false; this.playing = false; this.held = false; this.post({ type: 'paused', frame: currentFrame + i, pos: this.lastP / this.srate }); }\n        if (this.wait && this.playing) {                                           // holding until the page arrives\n          if (!this.held) { this.held = true; this.post({ type: 'pos', frame: currentFrame + i, pos: this.lastP / this.srate, rate: 0 }); }\n          L[i] = 0; if (R) R[i] = 0;\n          continue;\n        }\n      }\n      if (!this.playing) { L[i] = 0; if (R) R[i] = 0; continue; }\n      if (this.held) { this.held = false; this.rep = 0; this.post({ type: 'pos', frame: currentFrame + i, pos: this.lastP / this.srate, rate: this.mode ? this.rate : 1 }); }\n      this.outNext();\n      const p = this.oP;\n      if (this.jumpTo < 0 && !this.stopping) {\n        const adv = this.fadeN * this.step * (this.mode ? this.rate : 1);       // how far the recording moves during a fade\n        if (this.looping && p >= this.lb - adv) {\n          if (this.left !== 0) this.schedule(this.la, 'wrap');\n          else { this.looping = false; this.post({ type: 'loopdone', frame: currentFrame + i, pos: p / this.srate, gen: this.loopGen }); }\n        } else if (p >= this.len - adv) {\n          if (this.fileLoop) this.schedule(0, 'filewrap');\n          else if (p >= this.len) {\n            this.playing = false; this.gain = 0; this.target = 0; this.lastP = this.len;\n            this.post({ type: 'ended', frame: currentFrame + i, pos: this.len / this.srate });\n            L[i] = 0; if (R) R[i] = 0;\n            continue;\n          }\n        }\n      }\n      this.lastP = p;\n      const g = this.gain;\n      L[i] = this.oL * g; if (R) R[i] = this.oR * g;\n      if (++this.rep >= this.repN) { this.rep = 0; this.post({ type: 'pos', frame: currentFrame + i, pos: p / this.srate, rate: this.mode ? this.rate : 1 }); }\n    }\n    return true;\n  }\n}\nregisterProcessor('elp-player', ElpPlayer);\n";
 const WORKLET_SOURCES = [
   () => new URL('worklet.js', location.href).href,
   () => (WORKLET_SRC ? 'data:text/javascript;charset=utf-8,' + encodeURIComponent(WORKLET_SRC) : null),
@@ -1199,9 +1225,11 @@ function onEngineMsg(m) {
   if (m.id !== engine.id) return;                       // left over from a recording that has been switched away from
   const H = engine.hist;
   switch (m.type) {
-    case 'pos': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); break;
+    case 'pos': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); pagerAt(m.pos); break;
+    case 'need': pagerWant(m.page, true); break;            // the sound is waiting for this page
     case 'jump':
       H.push({ frame: m.frame, pos: m.pos, rate: engine.playing ? m.rate : 0 });
+      pagerAt(m.pos);
       if (m.kind === 'seek' && m.seq === engine.seekSeq) engine.seekFrame = m.frame;
       if ((m.kind === 'wrap' && m.gen === engine.loopGen) || m.kind === 'filewrap') emit('wrap', m.kind);
       break;
@@ -1276,25 +1304,32 @@ function engineSeek(t) {
   t = clamp(t, 0, Math.max(0, (engine.duration || 0) - 0.01));
   engine.seekTarget = t; engine.seekFrame = -1; engine.lastPos = t; engine.ended = false;
   enginePost({ t: 'seek', pos: t, seq: ++engine.seekSeq });
+  pagerSeek(t);
 }
 function engineStop() {                    // silence the current recording (switching to another one)
   engine.wantPlay = false;
   if (engine.playing) { engine.playing = false; stopTick(); enginePost({ t: 'pause' }); emit('pause'); }
   engine.loaded = false; engine.id = null;  // from now on, messages about it (a late 'ended', say) are ignored
+  pagerClose();
 }
 function engineUnload() { engineStop(); enginePost({ t: 'unload' }); }
-function engineLoad(id, pcm, startAt) {
-  return new Promise((resolve) => {
-    engine.loaded = false; engine.id = id; engine.loadId = id; engine.loadResolve = resolve;
-    engine.playing = false; engine.ended = false; engine.duration = pcm.len / pcm.rate; engine.srate = pcm.rate;
-    engine.hist = []; engine.lastPos = startAt || 0; engine.seekTarget = null; engine.seekFrame = -1;
-    enginePost({ t: 'load', id, ch: pcm.ch, len: pcm.len, srate: pcm.rate, pos: startAt || 0 }, pcm.ch.map((c) => c.buffer));
-    pcm.ch = [];
-  }).then(() => { engine.loaded = true; });
+// Hands the engine a recording: its length now, its pages as they are decoded (all at once when it was read whole).
+// Before the first Play tap starts the engine this is queued; only the latest recording's audio waits in the queue.
+function engineLoad(id, src, whole, rate, len, startAt) {
+  if (engine.loadResolve) { const r = engine.loadResolve; engine.loadResolve = null; r(); }
+  if (!engine.node) engine.queue = engine.queue.filter(([m]) => m.t !== 'load' && m.t !== 'page' && m.t !== 'drop');
+  const nch = whole ? whole.nch : (src.stereo ? 2 : 1);
+  engine.loaded = false; engine.id = id; engine.loadId = id;
+  engine.playing = false; engine.ended = false; engine.duration = len / rate; engine.srate = rate;
+  engine.hist = []; engine.lastPos = startAt || 0; engine.seekTarget = null; engine.seekFrame = -1;
+  const done = new Promise((resolve) => { engine.loadResolve = resolve; });
+  enginePost({ t: 'load', id, len, srate: rate, nch, pos: startAt || 0 });
+  pagerOpen(id, src, whole, rate, len, nch, startAt || 0);
+  return done.then(() => { if (engine.loadId === id && engine.id === id) engine.loaded = true; });
 }
 // gen identifies the section, so a repeat that was already on its way for an earlier section is ignored.
-function engineSetLoop(a, b, left, gen) { gen = gen | 0; engine.loopGen = gen; enginePost({ t: 'loop', a, b, left, gen }); }
-function engineClearLoop() { engine.loopGen = -1; enginePost({ t: 'noloop' }); }
+function engineSetLoop(a, b, left, gen) { gen = gen | 0; engine.loopGen = gen; enginePost({ t: 'loop', a, b, left, gen }); pagerPin(a); }
+function engineClearLoop() { engine.loopGen = -1; enginePost({ t: 'noloop' }); pager.pins = []; }
 const audio = {
   get currentTime() { return enginePosition(); },
   set currentTime(t) { engineSeek(t); },
@@ -1311,98 +1346,540 @@ const audio = {
   addEventListener(type, fn) { if (!engine.listeners.has(type)) engine.listeners.set(type, []); engine.listeners.get(type).push(fn); },
 };
 
-/* ---------- decoding recordings for the engine ---------- */
-// The whole recording is decoded once into 16-bit samples (mono when both channels are the same, or when stereo
-// wouldn't fit the iPhone budget). Long recordings use a lower sample rate. A copy at up to 16 kHz feeds the waveform.
+/* ---------- reading recordings a page at a time ---------- */
+// MP3 and WAV recordings are never decoded whole. The engine gets pages of 2^20 samples (about 22 s at 48 kHz) around
+// the playhead, decoded when needed and let go when far behind, so even a 3-hour lecture takes a few MB, plays at full
+// quality and starts at once. Every stretch lands on the recording's exact timeline: an MP3's frames are counted once
+// (headers only), and where the decoder puts a stretch that starts mid-file is measured once, on the first seconds.
+// The waveform is made in one background pass the first time and kept. Other formats (m4a, …) are decoded whole, as
+// before (long ones at a lower rate, to fit the iPhone's memory).
+const PAGE_SHIFT = 20, PAGE = 1 << PAGE_SHIFT;           // samples per page; must match worklet.js
+const PAGES_KEPT = 8;                                    // pages the engine holds at most (2 MB each per channel)
+const MP3_PRE = 12, MP3_POST = 4;                        // frames decoded before and after a stretch (bit reservoir, decoder delay)
+const WAVE_PASS_RATE = 16000, WAVE_RAW_BUDGET = 16e6;    // the waveform pass: its rate, and the most samples its copy keeps
+const SRC_V = 1;                                         // version of the frame index kept beside the waveforms
 const DECODE_RATES = [48000, 44100, 32000, 24000, 22050, 16000, 12000, 8000];
-const decodeRateFor = (dur, cap) => { const want = Math.min(cap, DECODE_BUDGET / Math.max(1, dur)); return DECODE_RATES.find((r) => r <= want) || 8000; };
-const pcmCache = new Map(), pcmDecoding = new Map();
+const decodeRateFor = (dur, cap, budget = DECODE_BUDGET) => { const want = Math.min(cap, budget / Math.max(1, dur)); return DECODE_RATES.find((r) => r <= want) || 8000; };
+const pageRate = () => (engine.ctx ? clamp(engine.ctx.sampleRate, 8000, 48000) : 48000);
+const skipped = (why) => Object.assign(new Error(why), { skipped: true });
+const sliceBytes = (blob, a, b) => blob.slice(a, b).arrayBuffer();
 function decodeAudio(ctx, buf) {
   return new Promise((resolve, reject) => {
     try { const p = ctx.decodeAudioData(buf, resolve, reject); if (p && p.then) p.then(resolve, reject); }
     catch (e) { reject(e); }
   });
 }
-async function decodePcm(t, blob) {
-  if (!blob) throw new Error('missing');
-  const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  if (!Ctx) throw new Error('this browser can’t decode audio');
-  const dur = t.duration || blob.size / 16000;
-  const rate = decodeRateFor(dur, engine.ctx ? engine.ctx.sampleRate : 48000);
-  const ab = await decodeAudio(new Ctx(1, 1, rate), await blob.arrayBuffer());
-  const n = ab.length, c0 = ab.getChannelData(0), c1 = ab.numberOfChannels > 1 ? ab.getChannelData(1) : null;
-  let stereo = false;
-  if (c1) { let d = 0, s = 0; for (let i = 0; i < n; i += 37) { d += Math.abs(c0[i] - c1[i]); s += Math.abs(c0[i]) + Math.abs(c1[i]); } stereo = d > s * 0.01; }
-  if (stereo && n * 2 > DECODE_BUDGET) stereo = false;
-  const L = new Int16Array(n), R = stereo ? new Int16Array(n) : null;
-  const waveRate = Math.min(16000, rate), ratio = rate / waveRate, wave = new Int16Array(Math.max(1, Math.ceil(n / ratio)));
-  let acc = 0, cnt = 0, next = ratio, wi = 0;
-  const STEP = 1 << 20;
-  for (let i0 = 0; i0 < n; i0 += STEP) {
-    const i1 = Math.min(n, i0 + STEP);
-    for (let i = i0; i < i1; i++) {
-      let a = c0[i]; a = a < -1 ? -1 : a > 1 ? 1 : a;
-      let b = c1 ? c1[i] : a; b = b < -1 ? -1 : b > 1 ? 1 : b;
-      const m = (a + b) * 0.5;
-      if (stereo) { L[i] = a * 32767; R[i] = b * 32767; } else L[i] = m * 32767;
-      acc += m; cnt++;
-      if (i + 1 >= next) { if (wi < wave.length) wave[wi++] = (acc / cnt) * 32767; acc = 0; cnt = 0; next += ratio; }
-    }
-    if (i1 < n) await sleep(0);
+const decodeCtxs = new Map();
+function decodeAt(rate, buf) {
+  let ctx = decodeCtxs.get(rate);
+  if (!ctx) {
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!Ctx) return Promise.reject(new Error('this browser can’t decode audio'));
+    ctx = new Ctx(1, 1, rate); decodeCtxs.set(rate, ctx);
   }
-  if (cnt && wi < wave.length) wave[wi++] = (acc / cnt) * 32767;
-  return { id: t.id, blob, rate, len: n, ch: stereo ? [L, R] : [L], wave: wi === wave.length ? wave : wave.slice(0, wi), waveRate };
+  return decodeAudio(ctx, buf);
 }
-// One decode at a time. A decode whose recording is no longer wanted by the time its turn comes is skipped,
-// so tapping quickly through long recordings never piles up several at once.
-let decodeChain = Promise.resolve();
-function getPcm(t, { prefetching = false } = {}) {
-  const blob = S.blobs.get(t.id);
-  const hit = pcmCache.get(t.id);
-  if (hit) { pcmCache.delete(t.id); if (hit.blob === blob && hit.ch.length && hit.ch[0].byteLength) return Promise.resolve(hit); }
-  const pend = pcmDecoding.get(t.id);
+function isStereo(ab) {                                  // the two channels carry different sound (not mono saved twice)
+  if (ab.numberOfChannels < 2) return false;
+  const c0 = ab.getChannelData(0), c1 = ab.getChannelData(1);
+  let d = 0, s = 0;
+  for (let i = 0; i < c0.length; i += 37) { d += Math.abs(c0[i] - c1[i]); s += Math.abs(c0[i]) + Math.abs(c1[i]); }
+  return d > s * 0.01;
+}
+function mixDown(L, R) { const m = new Float32Array(L.length); for (let i = 0; i < L.length; i++) m[i] = (L[i] + R[i]) * 0.5; return m; }
+
+// One decode at a time, most urgent first: 0 a page the sound is waiting for, 1 opening a recording and the pages
+// ahead, 2 getting the next recording ready, 3 the waveform pass.
+const jobs = [];
+let jobRunning = false;
+function enqueue(pri, run) {
+  return new Promise((ok, fail) => {
+    let i = jobs.length;
+    while (i > 0 && jobs[i - 1].pri > pri) i--;
+    jobs.splice(i, 0, { pri, run, ok, fail });
+    if (!jobRunning) Promise.resolve().then(runJobs);   // after the caller has queued everything it wants
+  });
+}
+async function runJobs() {
+  if (jobRunning) return;
+  jobRunning = true;
+  while (jobs.length) { const j = jobs.shift(); try { j.ok(await j.run()); } catch (e) { j.fail(e); } }
+  jobRunning = false;
+}
+
+/* MP3: where every frame starts, and where the decoder puts a stretch */
+const MP3_SR = [[11025, 12000, 8000], null, [22050, 24000, 16000], [44100, 48000, 32000]];   // by version: 2.5, –, 2, 1
+const MP3_KB = [[0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160], [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]];
+// The byte offset of every audio frame, read from the frame headers 4 MB at a time (nothing is decoded).
+async function scanMp3(blob) {
+  const size = blob.size, STEP = 4 << 20;
+  let u = new Uint8Array(0), ub = 0;
+  const load = async (p) => { u = new Uint8Array(await sliceBytes(blob, p, Math.min(size, p + STEP))); ub = p; };
+  let p = 0;
+  for (let n = 0; n < 8; n++) {                          // ID3v2 tags in front
+    await load(p);
+    if (u.length < 10 || u[0] !== 0x49 || u[1] !== 0x44 || u[2] !== 0x33) break;
+    p += 10 + ((u[6] & 127) << 21 | (u[7] & 127) << 14 | (u[8] & 127) << 7 | (u[9] & 127)) + (u[5] & 0x10 ? 10 : 0);
+  }
+  if (p + 4 > size) return null;
+  if (p !== ub) await load(p);
+  let k1 = 0, k2 = 0, lens = null, v1 = false, sr0 = 0, first = -1;
+  const lenAt = (i) => {                                 // length of the frame whose header is at u[i]; 0 if it isn't one like the first
+    if (u[i] !== 0xFF || (u[i + 1] & 0xFE) !== k1 || (u[i + 2] & 0x0C) !== k2) return 0;
+    const bri = u[i + 2] >> 4;
+    return bri === 0 || bri === 15 ? 0 : lens[bri * 2 + ((u[i + 2] >> 1) & 1)];
+  };
+  for (let i = 0; i + 4 <= u.length && i < 65536 && first < 0; i++) {   // the first Layer III frame that another one follows
+    if (u[i] !== 0xFF || (u[i + 1] & 0xE0) !== 0xE0) continue;
+    const ver = (u[i + 1] >> 3) & 3, layer = (u[i + 1] >> 1) & 3, sri = (u[i + 2] >> 2) & 3;
+    if (ver === 1 || layer !== 1 || sri === 3) continue;
+    k1 = u[i + 1] & 0xFE; k2 = u[i + 2] & 0x0C; v1 = ver === 3; sr0 = MP3_SR[ver][sri];
+    lens = new Uint16Array(30);
+    for (let b = 1; b < 15; b++) for (let pad = 0; pad < 2; pad++) lens[b * 2 + pad] = Math.floor((v1 ? 144000 : 72000) * MP3_KB[v1 ? 1 : 0][b] / sr0) + pad;
+    const L = lenAt(i);
+    if (L && (i + L + 4 > u.length ? ub + i + L >= size : lenAt(i + L) > 0)) first = i;
+  }
+  if (first < 0) return null;
+  const spf = v1 ? 1152 : 576;
+  {                                                      // a Xing / Info / VBRI frame in front holds the encoder's notes, not sound
+    const mono = (u[first + 3] >> 6) === 3, at = first + 4 + (u[first + 1] & 1 ? 0 : 2) + (v1 ? (mono ? 17 : 32) : (mono ? 9 : 17));
+    const tag = (q) => (q + 4 <= u.length ? String.fromCharCode(u[q], u[q + 1], u[q + 2], u[q + 3]) : '');
+    if (tag(at) === 'Xing' || tag(at) === 'Info' || tag(first + 36) === 'VBRI') first += lenAt(first);
+  }
+  let off = new Uint32Array(Math.max(4096, Math.ceil((size - ub - first) / 100) + 2)), n = 0, q = ub + first;
+  while (q + 4 <= size) {
+    if (q < ub || q + 4 > ub + u.length) await load(q);
+    const end = u.length - 4;
+    let i = q - ub;
+    for (let L; i <= end && (L = lenAt(i)); i += L) {
+      if (n + 2 > off.length) { const o = new Uint32Array(off.length * 2); o.set(off); off = o; }
+      off[n++] = ub + i;
+    }
+    q = ub + i;
+    if (i > end) continue;                               // went past what is loaded: load more
+    let j = -1;                                          // not a frame: tags at the end, or a damaged stretch; look for more frames nearby
+    for (let x = i + 1, lim = Math.min(end, i + 65536); x <= lim; x++) { const L = lenAt(x); if (L && (x + L > end || lenAt(x + L))) { j = x; break; } }
+    if (j < 0) break;
+    q = ub + j;
+  }
+  if (q > size && n) { n--; q = off[n]; }               // the last frame was cut short
+  if (n < 16) return null;
+  off[n] = Math.min(q, size);
+  return { n, off: off.slice(0, n + 1), spf, sr0 };
+}
+// How alike a[ia…] and b[ib…] are over n samples, looking at every `step`th one (1 = the same shape).
+function likeness(a, ia, b, ib, n, step) {
+  let ab = 0, aa = 0, bb = 0;
+  for (let j = 0; j < n; j += step) { const x = a[ia + j], y = b[ib + j]; ab += x * y; aa += x * x; bb += y * y; }
+  return aa > 0 && bb > 0 ? ab / Math.sqrt(aa * bb) : 0;
+}
+function loudest(x, lo, hi, W) {                         // the loudest W samples between lo and hi (-1 if it is all near silence)
+  let best = -1, bv = 0;
+  for (let i = Math.max(0, lo); i <= hi; i += W >> 1) { let e = 0; for (let j = 0; j < W; j += 2) e += x[i + j] * x[i + j]; if (e > bv) { bv = e; best = i; } }
+  return best >= 0 && Math.sqrt(bv / (W >> 1)) > 0.003 ? best : -1;
+}
+// Where a stretch decoded without the file's header lands on the whole-file timeline. Measured on the first seconds,
+// decoded both ways at the file's own rate (nothing is resampled, so the samples match exactly), and checked on a
+// stretch that starts mid-file. If the decoder doesn't behave as expected the recording is decoded whole instead.
+async function calibrateMp3(blob, s) {
+  const spf = s.spf, sr = s.sr0, DMAX = 2 * spf + 2112, W = Math.round(sr * 0.05);
+  for (const secs of [40, 90]) {
+    const Ec = Math.min(s.n, Math.ceil(sr * secs / spf)), Sm = Ec >> 1;
+    if (Ec - Sm < MP3_PRE + 24) return false;            // too short to measure (and quick to decode whole)
+    let w0 = -1, Rw = null;
+    {
+      const ref = await decodeAt(sr, await sliceBytes(blob, 0, s.off[Ec])), R = ref.getChannelData(0);
+      s.stereo = isStereo(ref);
+      w0 = loudest(R, (Sm + MP3_PRE + 4) * spf, R.length - W - DMAX, W);
+      if (w0 >= 0) Rw = R.slice(w0, w0 + W);
+    }
+    if (w0 < 0) { if (Ec === s.n) return false; continue; }   // silence: try a longer stretch
+    const h0 = await decodeAt(sr, await sliceBytes(blob, s.off[0], s.off[Ec])), A = h0.getChannelData(0);
+    let delta = 0, bv = -1;
+    for (let d = -DMAX; d <= DMAX; d++) {
+      const ib = w0 - d;
+      if (ib < 0 || ib + W > A.length) continue;
+      const v = likeness(Rw, 0, A, ib, W, 4);
+      if (v > bv) { bv = v; delta = d; }
+    }
+    if (likeness(Rw, 0, A, w0 - delta, W, 1) < 0.98) return false;
+    const k0 = Ec * spf - h0.length;
+    const mid = await decodeAt(sr, await sliceBytes(blob, s.off[Sm], s.off[Ec])), M = mid.getChannelData(0);
+    let dm = -1;                                         // whole frames the decoder left out at the start of a mid-file stretch
+    for (let d = 0; d <= MP3_PRE && dm < 0; d++) {
+      const ib = w0 - ((Sm + d) * spf + delta);
+      if (ib >= 0 && ib + W <= M.length && likeness(Rw, 0, M, ib, W, 1) >= 0.98) dm = d;
+    }
+    if (dm < 0) return false;
+    s.delta = delta;                                     // a headerless stretch from frame S starts at S·spf + delta
+    s.k = (Ec - Sm - dm) * spf - mid.length;             // samples the decoder trims from such a stretch
+    s.nat = s.n * spf - k0 + delta;                      // the recording's length at its own rate
+    return true;
+  }
+  return false;
+}
+async function mp3Source(id, blob) {
+  let d = null;
+  try { d = await waveDb.get(id + '|src'); } catch (e) { d = null; }
+  if (!(d && d.v === SRC_V && d.kind === 'mp3' && d.size === blob.size && d.off && d.off.length === d.n + 1)) {
+    const s = await scanMp3(blob);
+    if (!s || !(await calibrateMp3(blob, s))) return null;
+    d = { v: SRC_V, kind: 'mp3', size: blob.size, n: s.n, off: s.off, spf: s.spf, sr0: s.sr0, delta: s.delta, k: s.k, nat: s.nat, stereo: s.stereo };
+    waveDb.put(id + '|src', d).catch(() => {});
+  }
+  return Object.assign({}, d, { blob });
+}
+/* WAV: the samples are where the header says */
+async function wavSource(blob) {
+  const u = new Uint8Array(await sliceBytes(blob, 0, Math.min(blob.size, 1 << 16))), v = new DataView(u.buffer);
+  const tag = (p) => String.fromCharCode(u[p], u[p + 1], u[p + 2], u[p + 3]);
+  let p = 12, fmt = null, data = -1, dlen = 0;
+  while (p + 8 <= u.length) {
+    const id = tag(p), len = v.getUint32(p + 4, true);
+    if (id === 'fmt ') fmt = u.slice(p, p + 8 + len + (len & 1));
+    else if (id === 'data') { data = p + 8; dlen = len; break; }
+    p += 8 + len + (len & 1);
+  }
+  if (!fmt || fmt.length < 24 || data < 0) return null;
+  const f = new DataView(fmt.buffer), code = f.getUint16(8, true), nch = f.getUint16(10, true), sr0 = f.getUint32(12, true), block = f.getUint16(20, true);
+  const sub = code === 0xFFFE && fmt.length >= 34 ? f.getUint16(32, true) : code;
+  if ((sub !== 1 && sub !== 3) || !nch || !sr0 || !block) return null;
+  if (!dlen || dlen === 0xFFFFFFFF || data + dlen > blob.size) dlen = blob.size - data;
+  const frames = Math.floor(dlen / block);
+  if (frames < 1) return null;
+  const src = { kind: 'wav', blob, fmt, data, block, sr0, frames, nat: frames, stereo: false };
+  if (nch > 1) {                                         // stereo, or mono saved twice? A few seconds from the middle tell.
+    const a = Math.max(0, (frames >> 1) - sr0 * 5), b = Math.min(frames, a + sr0 * 10);
+    src.stereo = isStereo(await decodeAt(sr0, await wavPiece(src, a, b).arrayBuffer()));
+  }
+  return src;
+}
+function wavPiece(src, na, nb) {                         // samples na…nb as a small WAV file of their own
+  const bytes = (nb - na) * src.block, h = new DataView(new ArrayBuffer(12)), d = new DataView(new ArrayBuffer(8));
+  const str = (v, o, s) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(h, 0, 'RIFF'); h.setUint32(4, 4 + src.fmt.length + 8 + bytes, true); str(h, 8, 'WAVE');
+  str(d, 0, 'data'); d.setUint32(4, bytes, true);
+  return new Blob([h.buffer, src.fmt, d.buffer, src.blob.slice(src.data + na * src.block, src.data + nb * src.block)]);
+}
+async function makeSource(id, blob) {
+  const h = new Uint8Array(await sliceBytes(blob, 0, 12)), tag = (p) => String.fromCharCode(h[p], h[p + 1], h[p + 2], h[p + 3]);
+  try {
+    if (h.length >= 12 && tag(0) === 'RIFF' && tag(8) === 'WAVE') { const w = await wavSource(blob); if (w) return w; }
+    else if ((h[0] === 0x49 && h[1] === 0x44 && h[2] === 0x33) || (h[0] === 0xFF && (h[1] & 0xE0) === 0xE0)) { const m = await mp3Source(id, blob); if (m) return m; }
+  } catch (e) { console.warn('Echo Loop+ Touch: this recording is decoded whole instead', e); }
+  return { kind: 'whole', blob };
+}
+const srcLen = (src, rate) => Math.max(0, Math.floor(src.nat * rate / src.sr0));   // samples at `rate`
+const srcCache = new Map(), srcPend = new Map();
+// What reading a recording a piece at a time needs (its frame index and decoder offset), for the last few opened.
+function getSource(t, pri = 1) {
+  const id = t.id, blob = S.blobs.get(id);
+  if (!blob) return Promise.reject(new Error('missing'));
+  const hit = srcCache.get(id);
+  if (hit && hit.blob === blob) { srcCache.delete(id); srcCache.set(id, hit); return Promise.resolve(hit); }
+  const pend = srcPend.get(id);
   if (pend && pend.blob === blob) return pend.pr;
   const entry = { blob, pr: null };
-  entry.pr = decodeChain.then(() => {
-    if (!byId(t.id) || S.blobs.get(t.id) !== blob) throw Object.assign(new Error('replaced'), { skipped: true });
-    if (!prefetching && t.id !== S.currentId) throw Object.assign(new Error('not needed any more'), { skipped: true });
-    return decodePcm(t, blob);
-  }).finally(() => { if (pcmDecoding.get(t.id) === entry) pcmDecoding.delete(t.id); });
-  decodeChain = entry.pr.catch(() => {});
-  pcmDecoding.set(t.id, entry);
+  entry.pr = enqueue(pri, () => {
+    if (!byId(id) || S.blobs.get(id) !== blob) throw skipped('replaced');
+    if (pri < 2 && id !== S.currentId) throw skipped('not needed any more');
+    return makeSource(id, blob);
+  }).then((src) => {
+    if (S.blobs.get(id) === blob) { srcCache.set(id, src); while (srcCache.size > 4) srcCache.delete(srcCache.keys().next().value); }
+    return src;
+  }).finally(() => { if (srcPend.get(id) === entry) srcPend.delete(id); });
+  srcPend.set(id, entry);
   return entry.pr;
 }
-// Keep a decoded recording for later (prefetched, or opened and then switched away from), within a memory limit.
-function stashPcm(pcm) {
-  if (!pcm || pcm.claimed || !pcm.ch.length || !byId(pcm.id) || S.blobs.get(pcm.id) !== pcm.blob) return;
-  pcmCache.delete(pcm.id); pcmCache.set(pcm.id, pcm);
-  const bytes = () => { let n = 0; for (const p of pcmCache.values()) for (const c of p.ch) n += c.byteLength; return n; };
-  while (pcmCache.size > 1 && bytes() > PCM_CACHE_BYTES) pcmCache.delete(pcmCache.keys().next().value);
+// The stretch [a, b) of a recording, in samples at `rate` on its own timeline: one Float32Array per channel (two when
+// it is stereo), exactly b − a samples long, silent past either end.
+async function readRange(src, a, b, rate) {
+  const nch = src.stereo ? 2 : 1, out = [];
+  for (let c = 0; c < nch; c++) out.push(new Float32Array(Math.max(0, b - a)));
+  if (b <= a) return out;
+  const sc = src.sr0 / rate;
+  let ab, i0;
+  if (src.kind === 'mp3') {
+    const spf = src.spf;
+    const S0 = Math.max(0, Math.floor((a * sc - src.delta) / spf) - MP3_PRE), E = Math.min(src.n, Math.ceil((b * sc - src.delta) / spf) + MP3_POST);
+    if (E <= S0) return out;
+    ab = await decodeAt(rate, await sliceBytes(src.blob, S0 ? src.off[S0] : 0, src.off[E]));
+    if (!S0) i0 = 0;                                     // from the very start: decoded with the file's own header, like the whole file
+    else {
+      const miss = ((E - S0) * spf - src.k - ab.length * sc) / spf, d = clamp(Math.round(miss), 0, MP3_PRE);   // frames left out at the start
+      if (Math.abs(miss - d) > 0.25 && !src.warned) { src.warned = true; console.warn('Echo Loop+ Touch: unexpected MP3 stretch length', miss); }
+      i0 = Math.round(((S0 + d) * spf + src.delta) / sc);
+    }
+  } else {
+    const na = Math.max(0, Math.floor(a * sc) - 4), nb = Math.min(src.frames, Math.ceil(b * sc) + 4);
+    if (nb <= na) return out;
+    ab = await decodeAt(rate, await wavPiece(src, na, nb).arrayBuffer());
+    i0 = Math.round(na / sc);
+  }
+  const m = ab.numberOfChannels, j0 = Math.max(0, a - i0), j1 = Math.min(ab.length, b - i0);
+  if (j1 > j0) {
+    if (nch === 1 && m > 1) {
+      const L = ab.getChannelData(0), R = ab.getChannelData(1), o = out[0], at = i0 - a;
+      for (let j = j0; j < j1; j++) o[j + at] = (L[j] + R[j]) * 0.5;
+    } else for (let c = 0; c < nch; c++) out[c].set(ab.getChannelData(Math.min(c, m - 1)).subarray(j0, j1), i0 + j0 - a);
+  }
+  return out;
 }
-// Decode the next recording a little before it is needed, so the change-over is immediate (also with the screen off).
+
+/* the engine's pages of the open recording */
+const pager = { gen: 0, src: null, id: null, rate: 0, len: 0, pages: 0, nch: 1, whole: false, cur: 0, heard: 0, xf: 64,
+  held: new Set(), want: [], busy: -1, kicked: false, edges: new Map(), pins: [], failed: false };
+let warm = null, warming = null;                        // the next recording's first page, decoded ahead of the change-over
+const pageOfSec = (sec) => clamp(Math.floor(sec * pager.rate / PAGE), 0, Math.max(0, pager.pages - 1));
+const xfFor = (rate) => Math.max(32, Math.round(rate * 0.004));   // pages decoded apart are blended over 4 ms
+// 16-bit samples of a page; its ends are blended with neighbours decoded before it, so every join is seamless.
+function pageFrom(f, off, n, nch, prev, next) {
+  const q = (v) => (v >= 1 ? 32767 : v <= -1 ? -32767 : Math.round(v * 32767)), ch = [];
+  for (let c = 0; c < nch; c++) {
+    const o = new Int16Array(n), x = f && f[Math.min(c, f.length - 1)];
+    if (x) {
+      for (let j = 0; j < n; j++) o[j] = q(x[off + j]);
+      const head = prev && prev.post[c], tail = next && next.pre[c];
+      if (head) for (let j = 0, m = Math.min(head.length, n); j < m; j++) { const w = (j + 0.5) / m; o[j] = q(head[j] * (1 - w) + x[off + j] * w); }
+      if (tail) for (let j = 0, m = Math.min(tail.length, n), s = n - m; j < m; j++) { const w = (j + 0.5) / m; o[s + j] = q(x[off + s + j] * (1 - w) + tail[j] * w); }
+    }
+    ch.push(o);
+  }
+  return ch;
+}
+const edgesOf = (f, off, n) => ({ pre: f.map((x) => x.slice(0, off)), post: f.map((x) => x.slice(off + n)) });
+function pagerClose() {
+  const P = pager;
+  P.gen++; P.src = null; P.id = null; P.held.clear(); P.want = []; P.busy = -1; P.kicked = false; P.edges.clear(); P.pins = [];
+}
+function pagerOpen(id, src, whole, rate, len, nch, startAt) {
+  pagerClose();
+  const P = pager;
+  Object.assign(P, { src, id, rate, len, nch, whole: !!whole, pages: Math.max(1, Math.ceil(len / PAGE)), xf: xfFor(rate), failed: false });
+  if (whole) {                                           // read whole: every page goes over at once
+    whole.pages.forEach((ch, k) => { enginePost({ t: 'page', id, k, ch }, ch.map((c) => c.buffer)); P.held.add(k); });
+    whole.pages = [];
+    return;
+  }
+  if (warm && warm.id === id && warm.blob === src.blob && warm.rate === rate && warm.nch === nch) {
+    P.edges.set(0, { pre: [], post: warm.post });
+    enginePost({ t: 'page', id, k: 0, ch: warm.ch }, warm.ch.map((c) => c.buffer)); P.held.add(0);
+  }
+  warm = null;
+  P.cur = P.heard = pageOfSec(startAt);
+  pagerWant(P.cur + 1, true); pagerWant(P.cur, true); pagerWant(0);
+}
+function pagerWant(k, urgent = false) {
+  const P = pager;
+  if (!P.src || P.whole || k < 0 || k >= P.pages || P.held.has(k) || P.busy === k) return;
+  const i = P.want.indexOf(k);
+  if (i >= 0) { if (!urgent || i === 0) return; P.want.splice(i, 1); }
+  if (urgent) P.want.unshift(k); else P.want.push(k);
+  kickPages(urgent ? 0 : 1);
+}
+function kickPages(pri) {
+  const P = pager, gen = P.gen;
+  if (P.kicked || !P.want.length) return;
+  P.kicked = true;
+  enqueue(pri, async () => {
+    if (gen !== P.gen) return;
+    P.kicked = false;
+    while (P.want.length && P.held.has(P.want[0])) P.want.shift();
+    const k = P.want.shift();
+    if (k === undefined) return;
+    P.busy = k;
+    try { await loadPage(k, gen); } finally { if (gen === P.gen) P.busy = -1; }
+    if (gen === P.gen) kickPages(1);
+  }).catch(() => {});
+}
+async function loadPage(k, gen) {
+  const P = pager, a = k * PAGE, b = Math.min(P.len, a + PAGE), lo = Math.max(0, a - P.xf), hi = Math.min(P.len, b + P.xf);
+  let f = null;
+  try { f = await readRange(P.src, lo, hi, P.rate).catch(() => readRange(P.src, lo, hi, P.rate)); }   // one more try
+  catch (e) {
+    if (gen !== P.gen) return;
+    console.warn('Echo Loop+ Touch: a stretch couldn’t be read', e);
+    if (!P.failed) { P.failed = true; toast('Part of this recording couldn’t be read', 3500); }
+  }
+  if (gen !== P.gen) return;
+  const ch = pageFrom(f, a - lo, b - a, P.nch, P.edges.get(k - 1), P.edges.get(k + 1));   // silent if it couldn't be read
+  if (f) P.edges.set(k, edgesOf(f, a - lo, b - a));
+  enginePost({ t: 'page', id: P.id, k, ch }, ch.map((c) => c.buffer));
+  P.held.add(k);
+  pagerTrim();
+}
+function pagerTrim() {                                   // let go of the pages furthest from the playhead
+  const P = pager;
+  if (P.whole || P.held.size <= PAGES_KEPT) return;
+  // around where the sound is going, and where it still is until the engine reports the jump (it fades out there)
+  const keep = new Set([0, P.cur - 1, P.cur, P.cur + 1, P.cur + 2, P.heard - 1, P.heard, P.heard + 1, ...P.pins]);
+  const ks = [...P.held].filter((k) => !keep.has(k)).sort((x, y) => Math.abs(y - P.cur) - Math.abs(x - P.cur)).slice(0, P.held.size - PAGES_KEPT);
+  if (!ks.length) return;
+  ks.forEach((k) => P.held.delete(k));
+  enginePost({ t: 'drop', id: P.id, ks });
+}
+function pagerAt(sec) {                                  // the sound is here: have the pages ahead ready
+  const P = pager;
+  if (!P.src || P.whole) return;
+  const k = pageOfSec(sec);
+  P.heard = k;
+  if (k === P.cur && P.held.has(k) && (k + 1 >= P.pages || P.held.has(k + 1) || P.busy === k + 1 || P.want.includes(k + 1))) return;
+  P.cur = k;
+  pagerWant(k, !P.held.has(k)); pagerWant(k + 1); pagerWant(k + 2);
+  pagerTrim();
+}
+function pagerSeek(sec) {
+  const P = pager;
+  if (!P.src || P.whole) return;
+  P.cur = pageOfSec(sec);
+  pagerWant(P.cur + 1, true); pagerWant(P.cur, true);
+  pagerTrim();
+}
+function pagerPin(a) {                                   // a section loop jumps back to A: keep its pages at hand
+  const P = pager;
+  if (!P.src || P.whole) { P.pins = []; return; }
+  const k = pageOfSec(a);
+  P.pins = [k, k + 1];
+  pagerWant(k); pagerWant(k + 1);
+}
+
+/* formats read whole (m4a, …) */
+let wholeCache = null, wholePend = null;
+// Decoded once at a rate that fits the iPhone's memory and cut into the engine's pages (the waveform comes with it).
+async function decodeWhole(t, src) {
+  const rate = decodeRateFor(t.duration || src.blob.size / 16000, pageRate());
+  const ab = await decodeAt(rate, await src.blob.arrayBuffer());
+  const n = ab.length, c0 = ab.getChannelData(0), c1 = ab.numberOfChannels > 1 ? ab.getChannelData(1) : null;
+  const stereo = isStereo(ab) && n * 2 <= DECODE_BUDGET, nch = stereo ? 2 : 1;
+  const acc = !S.waves.has(t.id) && !waveBuilding.has(t.id) ? waveAcc(rate, n) : null, pages = [];
+  for (let a = 0; a < n; a += PAGE) {
+    const b = Math.min(n, a + PAGE), L = c0.subarray(a, b), R = c1 ? c1.subarray(a, b) : null;
+    pages.push(pageFrom(stereo ? [L, R] : [R ? mixDown(L, R) : L], 0, b - a, nch, null, null));
+    if (acc) acc.add(a, R ? [L, R] : [L]);
+    if (b < n) await sleep(0);
+  }
+  return { id: t.id, blob: src.blob, rate, len: n, nch, pages, wave: acc ? acc.finish() : null };
+}
+function getWhole(t, src, pri) {
+  if (wholeCache && wholeCache.id === t.id && wholeCache.blob === src.blob) { const w = wholeCache; wholeCache = null; return Promise.resolve(w); }
+  if (wholePend && wholePend.id === t.id && wholePend.blob === src.blob) return wholePend.pr;
+  const pend = { id: t.id, blob: src.blob, pr: null };
+  pend.pr = enqueue(pri, () => {
+    if (!byId(t.id) || S.blobs.get(t.id) !== src.blob) throw skipped('replaced');
+    if (pri < 2 && t.id !== S.currentId) throw skipped('not needed any more');
+    return decodeWhole(t, src);
+  }).finally(() => { if (wholePend === pend) wholePend = null; });
+  wholePend = pend;
+  return pend.pr;
+}
+function stashWhole(w) {                                 // keep a recording decoded whole for later, within a memory limit
+  if (!w || !w.pages.length || !byId(w.id) || S.blobs.get(w.id) !== w.blob) return;
+  if (w.pages.reduce((n, p) => n + p.reduce((m, c) => m + c.byteLength, 0), 0) <= PCM_CACHE_BYTES) wholeCache = w;
+}
+// Get the next recording ready a little before it is needed, so the change-over is immediate (also with the screen off).
 function prefetch(t) {
-  if (!t || t.id === engine.id || pcmCache.has(t.id) || pcmDecoding.has(t.id)) return;
-  getPcm(t, { prefetching: true }).then(stashPcm).catch(() => {});
+  if (!t || t.id === engine.id || warming === t.id || (warm && warm.id === t.id) || (wholeCache && wholeCache.id === t.id)) return;
+  warming = t.id;
+  getSource(t, 2).then((src) => {
+    if (src.kind === 'whole') return getWhole(t, src, 2).then(stashWhole);
+    return enqueue(2, async () => {
+      const rate = pageRate(), len = srcLen(src, rate), b = Math.min(len, PAGE), nch = src.stereo ? 2 : 1;
+      const f = await readRange(src, 0, Math.min(len, b + xfFor(rate)), rate);
+      if (S.blobs.get(t.id) === src.blob && engine.id !== t.id) warm = { id: t.id, blob: src.blob, rate, nch, ch: pageFrom(f, 0, b, nch, null, null), post: edgesOf(f, 0, b).post };
+    });
+  }).catch(() => {}).finally(() => { if (warming === t.id) warming = null; });
 }
 // The audio of a recording was replaced (a reshuffled set): forget everything made from the old audio.
 function invalidateAudio(id) {
-  S.waves.delete(id); S.peaks.delete(id); S.noWave.delete(id); pcmCache.delete(id); pcmDecoding.delete(id); waveBuilding.delete(id);
+  S.waves.delete(id); S.peaks.delete(id); S.noWave.delete(id); srcCache.delete(id); srcPend.delete(id); waveBuilding.delete(id); wavePct.delete(id);
+  if (warm && warm.id === id) warm = null;
+  if (wholeCache && wholeCache.id === id) wholeCache = null;
+  waveDb.del(id + '|src').catch(() => {});
+}
+
+/* ---------- the waveform: made once, in a background pass over the recording ---------- */
+// Running sums for the waveform: a copy at up to 16 kHz (fewer for long recordings), the loudest point per 10 ms
+// (for snapping) and the loudness every 5 ms (for finding sound blocks) — fed a stretch at a time, in any order.
+function waveAcc(rate, len) {
+  const dur = len / rate, m = Math.max(1, Math.ceil(rate / Math.min(16000, WAVE_RAW_BUDGET / Math.max(1, dur))));
+  const raw = new Int16Array(Math.max(1, Math.ceil(len / m))), part = new Map();
+  const per = rate / PEAK_BPS, env0 = new Float32Array(Math.max(1, Math.ceil(len / per)));
+  const hop = Math.max(1, Math.round(rate * 0.005)), sq = new Float64Array(Math.ceil(len / hop) + 1);
+  const q = (v) => (v >= 1 ? 32767 : v <= -1 ? -32767 : Math.round(v * 32767));
+  return {
+    add(i0, chs) {
+      const n = Math.min(chs[0].length, len - i0);
+      if (n <= 0) return;
+      const L = chs[0], R = chs.length > 1 ? chs[1] : null, x = new Float32Array(n);
+      for (let j = 0; j < n; j++) { let v = R ? (L[j] + R[j]) * 0.5 : L[j]; x[j] = v < -1 ? -1 : v > 1 ? 1 : v; }
+      for (let j = 0; j < n;) {                          // the copy: the mean of every m samples
+        const i = i0 + j, ri = Math.floor(i / m), e = Math.min(n, (ri + 1) * m - i0);
+        let s = 0; for (let k = j; k < e; k++) s += x[k];
+        if (e - j === m) raw[ri] = q(s / m);
+        else { const p = part.get(ri) || { s: 0, c: 0 }; p.s += s; p.c += e - j; part.set(ri, p); }
+        j = e;
+      }
+      for (let j = 0; j < n;) {                          // the loudest point of every 10 ms
+        const i = i0 + j, bi = Math.floor(i / per), e = Math.min(n, Math.ceil((bi + 1) * per) - i0);
+        let mx = env0[bi]; for (let k = j; k < e; k++) { const v = x[k] < 0 ? -x[k] : x[k]; if (v > mx) mx = v; }
+        env0[bi] = mx; j = Math.max(e, j + 1);
+      }
+      for (let j = 0; j < n;) {                          // energy of every 5 ms
+        const i = i0 + j, bi = Math.floor(i / hop), e = Math.min(n, (bi + 1) * hop - i0);
+        let s = 0; for (let k = j; k < e; k++) s += x[k] * x[k];
+        sq[bi] += s; j = e;
+      }
+    },
+    finish() {
+      for (const [ri, p] of part) raw[ri] = q(p.s / p.c);
+      const sorted = Float32Array.from(env0).sort();
+      const eref = sorted[Math.floor((sorted.length - 1) * 0.995)] || sorted[sorted.length - 1] || 1, env = new Uint8Array(env0.length);
+      for (let i = 0; i < env0.length; i++) env[i] = Math.round(255 * Math.pow(Math.min(1, env0[i] / eref), 0.7));
+      const rn = Math.max(1, Math.ceil(len / hop)), rms5 = new Float32Array(rn);
+      for (let i = 0; i < rn; i++) {                     // over 10 ms around each 5 ms step, as elpBuildWave does
+        const c = i * hop, k0 = Math.max(0, c - hop), k1 = Math.min(len, c + hop);
+        rms5[i] = Math.sqrt(((i > 0 ? sq[i - 1] : 0) + sq[i]) / Math.max(1, k1 - k0));
+      }
+      return { rate: rate / m, raw, env, rms5, rmsRate: rate / hop };
+    },
+  };
+}
+const wavePct = new Map();                               // id -> how far its waveform pass has got (0…1)
+async function wavePass(id, src) {
+  const blob = src.blob;
+  if (S.waves.has(id) || waveBuilding.has(id) || S.noWave.has(id)) return;
+  const rate = WAVE_PASS_RATE, len = srcLen(src, rate), acc = waveAcc(rate, len), STEP = 1 << 19;
+  waveBuilding.set(id, blob); wavePct.set(id, 0);
+  if (id === S.currentId) renderWaveMsg();
+  let done = false;
+  try {
+    for (let a = 0; a < len; a += STEP) {
+      if (id !== S.currentId || S.blobs.get(id) !== blob) return;   // switched away (it starts again next time), or replaced
+      acc.add(a, await enqueue(3, () => readRange(src, a, Math.min(len, a + STEP), rate)));
+      wavePct.set(id, Math.min(1, (a + STEP) / len));
+      if (id === S.currentId) renderWaveMsg();
+    }
+    done = true;
+  } catch (e) { if (S.blobs.get(id) === blob) S.noWave.add(id); }
+  finally { wavePct.delete(id); if (!done && waveBuilding.get(id) === blob) { waveBuilding.delete(id); onWave(id); } }
+  if (done) { const w = acc.finish(); await buildWave(id, w.rate, w.raw, true, blob, w); }
 }
 
 /* ---------- waveform building in a background worker ---------- */
 let waveWorker = null, waveJob = 0;
 const waveJobs = new Map();
-function buildWaveData(rate, raw) {
-  if (waveWorker === false || !WAVE_WORKER_URL) return Promise.resolve(elpBuildWave(rate, raw));
+function buildWaveData(rate, raw, pre) {
+  if (waveWorker === false || !WAVE_WORKER_URL) return Promise.resolve(elpBuildWave(rate, raw, pre));
   if (!waveWorker) {
     try {
       waveWorker = new Worker(WAVE_WORKER_URL);
       waveWorker.onmessage = (e) => { const j = waveJobs.get(e.data.job); if (!j) return; waveJobs.delete(e.data.job); if (e.data.ok) j.ok(e.data.w); else j.fail(new Error(e.data.error)); };
       waveWorker.onerror = () => { waveWorker = false; for (const j of waveJobs.values()) j.fail(new Error('worker')); waveJobs.clear(); };
-    } catch (e) { waveWorker = false; return Promise.resolve(elpBuildWave(rate, raw)); }
+    } catch (e) { waveWorker = false; return Promise.resolve(elpBuildWave(rate, raw, pre)); }
   }
   const job = ++waveJob;
-  return new Promise((ok, fail) => { waveJobs.set(job, { ok, fail }); waveWorker.postMessage({ job, rate, raw }, [raw.buffer]); });
+  const tr = pre ? [raw.buffer, pre.env.buffer, pre.rms5.buffer] : [raw.buffer];
+  return new Promise((ok, fail) => { waveJobs.set(job, { ok, fail }); waveWorker.postMessage({ job, rate, raw, pre: pre ? { env: pre.env, rms5: pre.rms5, rmsRate: pre.rmsRate } : null }, tr); });
 }
 
 /* ================= playback: play counts, repeat modes, sections ================= */
@@ -1429,13 +1906,13 @@ function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
   if (!t) return;
   if (!S.blobs.get(t.id)) { toast('That recording is missing'); return; }
   if (autoplay) userPlayIntent();                         // still inside the tap that asked for it
-  const same = engine.id === t.id && engine.loaded;
+  const same = engine.id === t.id && engine.loaded, prevId = S.currentId;
   S.currentId = t.id; S.pass = 1; S.sec = null; S.mark = null;
   pendingSeek = startAt > 0.5 ? startAt : null;
   setViewFor(t, view);
   engineClearLoop(); setLoopFlag(); applyRate();
   updateMetadata();
-  renderNowPlaying(); renderList(); renderCount(); renderMode(); renderFlags(); renderProgress();
+  renderNowPlaying(); renderRows(prevId, t.id); renderCount(); renderMode(); renderFlags(); renderProgress();
   loadWave(t);
   if (same) {
     const to = pendingSeek || 0; pendingSeek = null;
@@ -1450,20 +1927,24 @@ async function openTrack(t, autoplay) {
   engineStop();
   if (autoplay) engine.wantPlay = true;
   renderNowPlaying(); renderPlayState();
-  let pcm = null;
+  let src = null, whole = null;
   try {
-    pcm = await getPcm(t);
-    if (pcm.wave) { offerRaw(t.id, pcm.wave, pcm.waveRate, pcm.blob); pcm.wave = null; }
-    if (token !== openToken) { stashPcm(pcm); return; }   // another recording was chosen meanwhile
-    if (pcm.blob !== S.blobs.get(t.id)) { openTrack(t, engine.wantPlay); return; }   // its audio was replaced meanwhile
-    pcm.claimed = true; pcmCache.delete(t.id);
+    src = await getSource(t);
+    if (token !== openToken) return;                      // another recording was chosen meanwhile
+    if (src.blob !== S.blobs.get(t.id)) { openTrack(t, engine.wantPlay); return; }   // its audio was replaced meanwhile
+    if (src.kind === 'whole') {
+      whole = await getWhole(t, src, 1);
+      if (whole.wave) { offerWave(t.id, whole.wave, whole.blob); whole.wave = null; }
+      if (token !== openToken) { stashWhole(whole); return; }
+    }
+    const rate = whole ? whole.rate : pageRate(), len = whole ? whole.len : srcLen(src, rate);
+    const loaded = engineLoad(t.id, src, whole, rate, len, pendingSeek != null ? clamp(pendingSeek, 0, len / rate) : 0);
     if (!engine.node) {                                   // ready; the engine itself starts with the first Play tap
       loadingId = null; gateWaitId = t.id; renderNowPlaying();
       try { await engineGate(); } finally { if (gateWaitId === t.id) gateWaitId = null; }
     }
-    if (token !== openToken) { pcm.claimed = false; stashPcm(pcm); return; }
-    const start = pendingSeek != null ? clamp(pendingSeek, 0, pcm.len / pcm.rate) : 0;
-    await engineLoad(t.id, pcm, start);
+    if (token !== openToken) return;
+    await loaded;
     if (token !== openToken) return;
     loadingId = null;
     pendingSeek = null;
@@ -1471,7 +1952,7 @@ async function openTrack(t, autoplay) {
     if (engine.wantPlay) { engine.wantPlay = false; playNow(); }
   } catch (err) {
     if (err && err.skipped) return;                       // not needed any more
-    if (!pcm && !S.waves.has(t.id) && !waveBuilding.has(t.id)) { S.noWave.add(t.id); onWave(t.id); }
+    if (!src && !S.waves.has(t.id) && !waveBuilding.has(t.id)) { S.noWave.add(t.id); onWave(t.id); }
     if (token !== openToken) return;
     loadingId = null; engine.wantPlay = false; syncKeepAlive();
     renderNowPlaying(); renderPlayState(); renderWaveMsg();
@@ -1480,7 +1961,7 @@ async function openTrack(t, autoplay) {
 }
 function onLoaded() {
   const t = current(), d = audio.duration;
-  if (t && isFinite(d) && d > 0 && (!t.duration || Math.abs(t.duration - d) > 0.5)) { t.duration = d; saveMeta(t); renderList(); }
+  if (t && isFinite(d) && d > 0 && (!t.duration || Math.abs(t.duration - d) > 0.5)) { t.duration = d; saveMeta(t); renderRows(t.id); }
   if (S.sec && isFinite(d) && S.sec.b > d) { S.sec.b = d; if (S.sec.b - S.sec.a < MIN_SEC) exitSection(); }
   setLoopFlag(); applyRate(); syncEngineLoop();
   clampView(); renderZoomUI();
@@ -1560,7 +2041,7 @@ function onFileWrap() {
   if (S.mark != null) { S.mark = null; renderMode(); toast('Marking cancelled: the recording started again'); }
   S.pass++;
   setLoopFlag();                                   // switches the loop off for the last play
-  renderCount(); renderList(); updatePositionState();
+  renderCount(); renderRows(S.currentId); updatePositionState();
 }
 // Decode the next recording shortly before this one ends.
 function maybePrefetch() {
@@ -1595,14 +2076,14 @@ function startSection(src, { play = true, reveal = 'zoom' } = {}) {
   if (play) playNow();
   if (reveal !== 'none') revealSection(reveal === 'zoom');
   updateMetadata(); updatePositionState();
-  renderMode(); renderCount(); renderFlags(); renderList();
+  renderMode(); renderCount(); renderFlags(); renderRows(S.currentId);
   persist();
 }
 function exitSection() {
   if (!S.sec) return;
   S.sec = null;
   setLoopFlag(); applyRate(); syncEngineLoop(); updateMetadata(); updatePositionState();
-  renderMode(); renderCount(); renderFlags(); renderList(); renderProgress();
+  renderMode(); renderCount(); renderFlags(); renderRows(S.currentId); renderProgress();
   persist();
 }
 function flagFor(s) { const t = current(); return (s && s.flagId && flagsOf(t).find((f) => f.id === s.flagId)) || null; }
@@ -1628,7 +2109,7 @@ function setEdge(which, value, { audition = true, snap = false } = {}) {
     seekAndLoop(which === 'a' ? s.a : Math.max(s.a, s.b - 1.5 * s.rate));
     syncFlag(); persist();
   } else syncEngineLoop();
-  renderEdges(); renderNowPlaying(); updateMetadata(); requestDraw();
+  renderEdges(); if (audition) renderNowPlaying(); updateMetadata(); requestDraw();
 }
 // Nudge size: 10 ms when zoomed in closely, 0.1 s otherwise.
 const nudgeStep = () => { const sp = viewGoal().span; return sp && sp < 3 ? 0.01 : NUDGE; };
@@ -1657,7 +2138,7 @@ function moveSection(newA, { audition = true } = {}) {
   s.a = a; s.b = ms(a + len); s.pass = 1;
   if (audition) { seekAndLoop(s.a); revealSection(false); persist(); }
   else syncEngineLoop();
-  renderEdges(); renderNowPlaying(); renderCount(); updateMetadata(); requestDraw();
+  renderEdges(); if (audition) renderNowPlaying(); renderCount(); updateMetadata(); requestDraw();
   return true;
 }
 function stepSection(dir) {
@@ -1794,7 +2275,7 @@ audio.addEventListener('ended', () => {
   renderPlayState();
   if (S.sec) { seekTo(S.sec.a); playNow(); return; }
   if (!loopsForever() && S.pass < repsOf(current())) {            // safety net: more plays still to go
-    S.pass++; setLoopFlag(); renderCount(); renderList(); seekTo(0); playNow(); return;
+    S.pass++; setLoopFlag(); renderCount(); renderRows(S.currentId); seekTo(0); playNow(); return;
   }
   goNext('auto');
 });
@@ -1931,7 +2412,7 @@ function splitSection() {
   const made = parts.map((p, i) => ({ id: uid(), a: ms(p.a), b: ms(p.b), rate: s.rate, reps: s.reps, label: null, created: now + i }));
   t.flags = [...flagsOf(t), ...made].sort((x, y) => x.a - y.a);
   saveMeta(t);
-  renderFlags(); renderList(); requestDraw();
+  renderFlags(); renderRows(S.currentId); requestDraw();
   toast(`Split into ${plural(made.length, 'flag')} (${DETECT[S.detect].label.toLowerCase()}) — Undo takes it back`, 3600);
 }
 function setTool(tool) {
@@ -1968,7 +2449,7 @@ function restoreFlags(t) {
       if (p < S.sec.a || p > S.sec.b) seekAndLoop(S.sec.a); else syncEngineLoop();
     }
   }
-  renderMode(); renderFlags(); renderList(); persist(); requestDraw();
+  renderMode(); renderFlags(); renderRows(t.id); persist(); requestDraw();
 }
 function stepHistory(from, to, verb) {
   while (from.length) {
@@ -1987,7 +2468,8 @@ function redo() { if (!U.redo.length) { toast('Nothing to redo'); return; } step
 
 /* ================= waveforms ================= */
 const waveBuilding = new Map();                          // id -> the audio (blob) its waveform is being built from
-// When a recording opens: show its cached waveform straight away. Otherwise the playback decode supplies one (offerRaw).
+// When a recording opens: show its cached waveform straight away. Otherwise one background pass over the recording makes it
+// (recordings read whole make theirs while they are decoded).
 async function loadWave(t) {
   if (!t) return;
   const id = t.id, blob = S.blobs.get(id);
@@ -1999,24 +2481,28 @@ async function loadWave(t) {
   let cached = null;
   try { cached = await waveDb.get(id); } catch (e) {}
   if (S.blobs.get(id) !== blob) return;
-  if (cached && cached.v === WAVE_V && cached.raw && cached.raw.length && !S.waves.has(id) && !waveBuilding.has(id)) {
-    touchWave(id, cached.raw.byteLength);
-    buildWave(id, cached.rate, cached.raw, false, blob);
+  if (cached && cached.v === WAVE_V && cached.raw && cached.raw.length && cached.env && cached.rms5) {
+    if (S.waves.has(id) || waveBuilding.has(id)) return;
+    touchWave(id, waveBytes(cached));
+    buildWave(id, cached.rate, cached.raw, false, blob, cached);
+    return;
   }
+  try { const src = await getSource(t); if (src.kind !== 'whole' && S.blobs.get(id) === blob) wavePass(id, src); } catch (e) {}
 }
-// After the playback decode: build the waveform from its copy (up to 16 kHz), unless one exists or is on its way.
-function offerRaw(id, raw, rate = 16000, blob = S.blobs.get(id)) {
-  if (!raw || !raw.length || S.waves.has(id) || waveBuilding.has(id)) return;
-  buildWave(id, rate, raw, true, blob);
+const waveBytes = (w) => w.raw.byteLength + w.env.byteLength + w.rms5.byteLength;
+// A waveform measured while a recording was decoded whole.
+function offerWave(id, w, blob = S.blobs.get(id)) {
+  if (!w || !w.raw.length || S.waves.has(id) || waveBuilding.has(id)) return;
+  buildWave(id, w.rate, w.raw, true, blob, w);
 }
-async function buildWave(id, rate, raw, store, blob) {
+async function buildWave(id, rate, raw, store, blob, pre) {
   waveBuilding.set(id, blob);
   if (id === S.currentId) renderWaveMsg();
   try {
-    const w = await buildWaveData(rate, raw);
+    const w = await buildWaveData(rate, raw, pre);
     if (!byId(id) || S.blobs.get(id) !== blob) return;   // deleted, or its audio replaced, meanwhile
     S.waves.set(id, w); S.noWave.delete(id);
-    if (store) waveDb.put(id, { v: WAVE_V, rate: w.rate, raw: w.raw }).then(() => touchWave(id, w.raw.byteLength)).catch(() => {});
+    if (store) waveDb.put(id, { v: WAVE_V, rate: w.rate, raw: w.raw, env: w.env, rms5: w.rms5, rmsRate: w.rmsRate }).then(() => touchWave(id, waveBytes(w))).catch(() => {});
     const env = { v: 1, bps: PEAK_BPS, data: w.env };
     if (!S.peaks.has(id)) db.putPeaks(id, env).catch(() => {});      // Echo Loop+ can reuse it
     S.peaks.set(id, env);
@@ -2043,6 +2529,7 @@ function forgetWave(id) {
   const ix = waveIndex();
   if (ix[id]) { delete ix[id]; saveWaveIndex(ix); }
   waveDb.del(id).catch(() => {});
+  waveDb.del(id + '|src').catch(() => {});                // its MP3 frame index
 }
 function evictWaves() {
   for (const id of Array.from(S.waves.keys())) {
@@ -2300,9 +2787,10 @@ function selShown() {
   const ds = dragState;
   return ds && ds.kind === 'select' && ds.moved ? { a: Math.min(ds.t0, ds.t1), b: Math.max(ds.t0, ds.t1) } : S.sec;
 }
-function drawWave(pt) {
+function drawWave() {
   const cv = cvWave; if (!cv.clientWidth) return;
-  const dpr = fit(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  headW.w = cv.clientWidth;
+  const dpr = fit(cv, 2), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   const t = current(), d = durationOf();
   if (!t || !(d > 0)) return;
@@ -2330,11 +2818,6 @@ function drawWave(pt) {
     ctx.fillStyle = COL.flag; ctx.fillRect(Math.round(x - dpr), 0, 2 * dpr, H);
     ctx.font = `700 ${12 * dpr}px ${UI_FONT}`; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     rr(ctx, x - dpr, 0, 44 * dpr, 20 * dpr, 5 * dpr); ctx.fillStyle = '#1C1C1E'; ctx.fillText('Start', x + 6 * dpr, 4 * dpr);
-  }
-  if (pt >= t0 - span * 0.01 && pt <= t0 + span * 1.01) {     // playhead
-    const x = X(pt), lw = Math.max(1, Math.round(1.6 * dpr));
-    ctx.fillStyle = COL.head; ctx.fillRect(Math.round(x - lw / 2), 0, lw, H);
-    ctx.beginPath(); ctx.moveTo(x - 6 * dpr, 0); ctx.lineTo(x + 6 * dpr, 0); ctx.lineTo(x, 8 * dpr); ctx.closePath(); ctx.fill();
   }
   if (sel) drawEdges(ctx, X(sel.a), X(sel.b), sel.b - sel.a, W, H, dpr, !!s && !(ds && ds.kind === 'select' && ds.moved), ds && ds.moved ? (ds.kind === 'edge' ? ds.which : ds.kind === 'move' ? 'move' : null) : null);
 }
@@ -2367,8 +2850,9 @@ function drawEdges(ctx, xa, xb, len, W, H, dpr, real, active) {
   knob(xa, 0, 'A', true, active === 'a');
   knob(xb, H - k, 'B', false, active === 'b');
 }
-function drawRuler(pt) {
+function drawRuler() {
   const cv = cvRuler; if (!cv.clientWidth) return;
+  headW.r = cv.clientWidth;
   const dpr = fit(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   const d = durationOf(); if (!current() || !(d > 0)) return;
@@ -2386,14 +2870,13 @@ function drawRuler(pt) {
   }
   const s = S.sec;
   if (s) { ctx.fillStyle = COL.secEdge; const xa = X(s.a), xb = X(s.b); ctx.fillRect(xa, H - 3 * dpr, Math.max(dpr, xb - xa), 3 * dpr); }
-  if (pt >= t0 && pt <= t0 + span) { const x = X(pt); ctx.fillStyle = COL.head; ctx.beginPath(); ctx.moveTo(x - 5 * dpr, H - 7 * dpr); ctx.lineTo(x + 5 * dpr, H - 7 * dpr); ctx.lineTo(x, H); ctx.closePath(); ctx.fill(); }
 }
 function drawLane() {
   const cv = cvLane; if (!cv.clientWidth) return;
   const dpr = fit(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H); laneBoxes = [];
   const t = current(), d = durationOf(); if (!t || !(d > 0)) return;
-  const fl = flagsOf(t), linked = flagFor(S.sec), t0 = V.start, pps = W / V.span, X = (tt) => (tt - t0) * pps;
+  const fl = flagsOf(t), linked = flagFor(S.sec), t0 = V.start, pps = W / V.span, X = (tt) => (tt - t0) * pps, names = flagLabels(fl);
   ctx.font = `650 ${12 * dpr}px ${UI_FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   if (!fl.length) {                                // upright, the flag strip below already says this
     if (isLandscape()) { ctx.fillStyle = COL.text3; ctx.fillText('Saved flags appear here — tap one to loop it', 4 * dpr, H / 2); }
@@ -2405,7 +2888,7 @@ function drawLane() {
     ctx.fillStyle = on ? COL.flag : COL.flagTint; rr(ctx, x0, y, bw, bh, 6 * dpr);
     ctx.fillStyle = on ? COL.flag : COL.flagText; ctx.fillRect(x0, y, Math.max(1, Math.round(1.5 * dpr)), bh);
     if (bw > 16 * dpr) {
-      const label = bw > 64 * dpr ? `${i + 1}  ${flagLabel(f, fl)}` : String(i + 1);
+      const label = bw > 64 * dpr ? `${i + 1}  ${names.get(f)}` : String(i + 1);
       ctx.save(); ctx.beginPath(); ctx.rect(x0, 0, bw - 4 * dpr, H); ctx.clip();
       ctx.fillStyle = on ? '#1C1C1E' : COL.flagText; ctx.fillText(label, Math.max(x0, 0) + 6 * dpr, H / 2 + 0.5 * dpr);
       ctx.restore();
@@ -2431,9 +2914,10 @@ function overviewBase(W, H, dpr, t, d, w, p) {
   }
   return off;
 }
-function drawOverview(pt) {
+function drawOverview() {
   const cv = cvOv; if (!cv.clientWidth) return;
-  const dpr = fit(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  headW.o = cv.clientWidth;
+  const dpr = fit(cv, 2), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   const t = current(), d = durationOf(); if (!t || !(d > 0)) return;
   const w = S.waves.get(t.id), p = S.peaks.get(t.id);
@@ -2457,7 +2941,6 @@ function drawOverview(pt) {
   ctx.strokeStyle = COL.viewEdge; ctx.lineWidth = 2 * dpr;
   const inset = dpr;
   ctx.beginPath(); ctx.rect(clamp(vx0, inset, W - inset), inset, clamp(vx1, inset, W - inset) - clamp(vx0, inset, W - inset), H - 2 * inset); ctx.stroke();
-  ctx.fillStyle = COL.head; ctx.fillRect(Math.round(X(pt) - dpr / 2), 0, Math.max(1, Math.round(dpr)), H);
 }
 
 /* ---------- the magnifier above your finger while you move an edge ---------- */
@@ -2483,7 +2966,7 @@ function drawLoupe() {
   if (cvLoupe.hidden) cvLoupe.hidden = false;
   if (st.width !== lw + 'px') { st.width = lw + 'px'; st.height = lh + 'px'; }
   st.transform = `translate(${Math.round(left)}px,${Math.round(top)}px)`;
-  const dpr = fit(cvLoupe), ctx = cvLoupe.getContext('2d'), W = cvLoupe.width, H = cvLoupe.height;
+  const dpr = fit(cvLoupe, 2), ctx = cvLoupe.getContext('2d'), W = cvLoupe.width, H = cvLoupe.height;
   ctx.clearRect(0, 0, W, H);
   const span = Math.max(MIN_SPAN * 0.6, (V.span || 1) / 6), t0 = f.t - span / 2;
   const labelH = 18 * dpr, mid = Math.round((H - labelH) / 2), amp = (H - labelH) / 2 - 4 * dpr;
@@ -2509,9 +2992,13 @@ function drawLoupe() {
 function hideLoupe() { if (!cvLoupe.hidden) cvLoupe.hidden = true; }
 
 /* ---------- frame scheduling ---------- */
-let drawQueued = false, rafOn = false;
+// The canvases are repainted only when something on them changed (requestDraw, or the view moved); while playing,
+// each frame just slides the playhead layers.
+let drawQueued = false, rafOn = false, dirty = true, drawnStart = NaN, drawnSpan = NaN;
+const headW = { w: 0, r: 0, o: 0 };                      // css widths of the waveform, ruler and overview at their last paint
 function requestDraw() {
-  if (drawQueued) return;
+  dirty = true;
+  if (drawQueued || rafOn) return;
   drawQueued = true;
   requestAnimationFrame(() => { drawQueued = false; if (!rafOn) drawAll(); });
 }
@@ -2520,9 +3007,25 @@ function drawAll() {
   const animating = stepAnim();
   const pt = displayTime();
   if (!audio.paused) followPlayhead(pt);
-  drawRuler(pt); drawWave(pt); drawLane(); drawOverview(pt); drawLoupe();
+  if (dirty || animating || V.start !== drawnStart || V.span !== drawnSpan) {
+    dirty = false; drawnStart = V.start; drawnSpan = V.span;
+    drawRuler(); drawWave(); drawLane(); drawOverview(); drawLoupe();
+  }
+  placeHeads(pt);
   renderClock(pt);
   if (animating && !rafOn) requestDraw();
+}
+function placeHeads(pt) {
+  const d = durationOf(), on = !!current() && d > 0, t0 = V.start, span = V.span, x = (pt - t0) / span;
+  moveHead(el.phWave, on && x >= -0.01 && x <= 1.01, x * headW.w);
+  moveHead(el.phRuler, on && x >= 0 && x <= 1, x * headW.r);
+  moveHead(el.phOv, on, on ? pt / d * headW.o : 0);
+}
+function moveHead(node, show, x) {
+  if (node.hidden === show) node.hidden = !show;
+  if (!show) return;
+  const dpr = window.devicePixelRatio || 1, tf = `translate3d(${Math.round(x * dpr) / dpr}px,0,0)`;
+  if (node._tf !== tf) { node._tf = tf; node.style.transform = tf; }
 }
 const displayTime = () => playheadTime();
 function startRAF() {
@@ -2549,8 +3052,9 @@ function renderWaveMsg() {
   if (!S.tracks.length) html = '<b>Add your recordings</b>Pick audio from Files or iCloud Drive.<br><label class="btn-big" for="fileInput" role="button" tabindex="0">' + svg('plus', 18) + 'Import recordings</label>';
   else if (!t) html = '<b>Choose a recording</b>Open the library (top left) and tap one.';
   else if (!S.waves.has(t.id) && !S.peaks.has(t.id)) {
+    const pct = wavePct.get(t.id);
     if (S.noWave.has(t.id)) html = 'No waveform for this recording — this iPhone couldn’t read it.';
-    else html = 'Drawing the waveform…';
+    else html = pct != null ? `Drawing the waveform… ${Math.round(pct * 100)}%` : 'Drawing the waveform…';
   }
   el.waveMsg.hidden = !html;
   if (html !== lastMsg) { lastMsg = html; el.waveMsg.innerHTML = html ? `<div>${html}</div>` : ''; }
@@ -2566,8 +3070,8 @@ let dragState = null, ovDrag = null, asRAF = 0;
 const waveW = () => el.wave.clientWidth || 1;
 const tAtX = (x) => V.start + (x / waveW()) * V.span;
 const xOfT = (t) => (t - V.start) / V.span * waveW();
-const waveRect = () => el.wave.getBoundingClientRect();
-const G = { pts: new Map(), mode: null, zone: null, id: null, lp: 0, pinch: null, pan: null, vel: [], lastTap: null };
+const waveRect = () => G.rect || el.wave.getBoundingClientRect();   // measured once per gesture
+const G = { pts: new Map(), mode: null, zone: null, id: null, lp: 0, pinch: null, pan: null, vel: [], lastTap: null, rect: null };
 
 // What a finger is over: 'a' or 'b' (an edge line or its knob), 'inside' the section, or null.
 function hitSection(x, y) {
@@ -2757,6 +3261,7 @@ function onTracksDown(e) {
   e.preventDefault();
   try { el.tracks.setPointerCapture(e.pointerId); } catch (err) {}
   stopInertia();
+  if (!G.pts.size) G.rect = el.wave.getBoundingClientRect();
   G.pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
   if (G.pts.size === 1) {
     G.id = e.pointerId; G.zone = zoneOf(e.target); G.mode = 'pend'; G.heldBy = null; G.vel = [];
@@ -2787,6 +3292,7 @@ function onTracksMove(e) {
 function onTracksUp(e) {
   const p = G.pts.get(e.pointerId); if (!p) return;
   G.pts.delete(e.pointerId);
+  if (!G.pts.size) setTimeout(() => { if (!G.pts.size) G.rect = null; });   // after this tap's own handling
   if (G.mode === 'pinch') { endPinch(); G.mode = G.pts.size ? 'held' : null; G.heldBy = 'pinch'; return; }   // the finger left behind is ignored
   if (G.mode === 'held') { if (!G.pts.size) G.mode = null; return; }
   if (e.pointerId !== G.id) return;
@@ -2798,6 +3304,7 @@ function onTracksUp(e) {
 }
 function onTracksCancel(e) {
   G.pts.delete(e.pointerId);
+  if (!G.pts.size) G.rect = null;
   clearTimeout(G.lp);
   if (G.mode === 'drag' || G.mode === 'pend') endWaveDrag(null, true);
   G.pinch = null;
@@ -2953,15 +3460,18 @@ function setupMediaSession() {
   on('nexttrack', () => goNext('user'));
   on('seekto', (d) => { if (d && typeof d.seekTime === 'number') userSeekTo(d.seekTime); });
 }
-function updateMetadata() {
+// The Lock Screen's title and subtitle: at most about three updates a second, none when nothing changed.
+let metaTimer = 0, metaKey = null;
+function updateMetadata() { if (!metaTimer) metaTimer = setTimeout(applyMetadata, 300); }
+function applyMetadata() {
+  metaTimer = 0;
   if (!MS || typeof MediaMetadata === 'undefined') return;
   const t = current(), s = S.sec;
-  try {
-    MS.metadata = t ? new MediaMetadata({
-      title: t.name,
-      artist: s ? `Section ${fmtPrecise(s.a)}–${fmtPrecise(s.b)}` : (t.folder || APP),
-      album: `${APP} · ${fmtRate(effRate())}×`, artwork: ART }) : null;
-  } catch (e) {}
+  const artist = t ? (s ? `Section ${fmtPrecise(s.a)}–${fmtPrecise(s.b)}` : (t.folder || APP)) : '', album = `${APP} · ${fmtRate(effRate())}×`;
+  const key = t ? `${t.id}|${t.name}|${artist}|${album}` : '';
+  if (key === metaKey) return;
+  metaKey = key;
+  try { MS.metadata = t ? new MediaMetadata({ title: t.name, artist, album, artwork: ART }) : null; } catch (e) {}
 }
 function setMSState(s) { if (MS) try { MS.playbackState = s; } catch (e) {} }
 function updatePositionState() {
@@ -2986,6 +3496,7 @@ const el = {
   sleepBtn: $('sleepBtn'), sleepText: $('sleepText'), secRepBtn: $('secRepBtn'), secRepText: $('secRepText'),
   secSlower: $('secSlower'), secFaster: $('secFaster'), secRateBtn: $('secRateBtn'), secRateText: $('secRateText'),
   secSaveBtn: $('secSaveBtn'), secSaveIcon: $('secSaveIcon'), secSaveText: $('secSaveText'), secExit: $('secExit'), secMore: $('secMore'),
+  phWave: $('phWave'), phRuler: $('phRuler'), phOv: $('phOv'),
   statusBtn: $('statusBtn'), statusText: $('statusText'), fileInput: $('fileInput'), toast: $('toast'), busy: $('busy'),
   busyText: $('busyText'), sheetWrap: $('sheetWrap'), sheet: $('sheet'), libWrap: $('libWrap'), lib: $('lib'), banner: $('installBanner'),
   toolSelect: $('toolSelect'), toolWand: $('toolWand'), detectBtn: $('detectBtn'), detectText: $('detectText'), splitBtn: $('splitBtn'),
@@ -3002,12 +3513,13 @@ function renderChips() {
     ...S.folders.map((f) => chip(f, f, S.tracks.filter((t) => t.folder === f).length)),
     h('button', { class: 'fchip add', type: 'button', onclick: () => newFolder(null) }, iconEl('plus', 16), 'Folder'),
   );
-  // keep the selected chip in view by scrolling the chip row only (never the page)
-  const sel = el.folders.querySelector('[aria-pressed="true"]');
-  if (sel && !el.libWrap.hidden) {
+  // keep the selected chip in view by scrolling the chip row only (never the page), measured with the next frame
+  requestAnimationFrame(() => {
+    const sel = el.folders.querySelector('[aria-pressed="true"]');
+    if (!sel || el.libWrap.hidden) return;
     const cr = el.folders.getBoundingClientRect(), sr = sel.getBoundingClientRect();
     if (sr.left < cr.left || sr.right > cr.right) el.folders.scrollLeft += sr.left - cr.left - 16;
-  }
+  });
 }
 function rowFor(t, i) {
   const cur = t.id === S.currentId, n = repsOf(t), nf = flagsOf(t).length;
@@ -3024,7 +3536,11 @@ function rowFor(t, i) {
       h('span', { text: live ? `${Math.min(S.pass, n)}/${n}` : `×${n}` })),
     h('button', { class: 'row-more', type: 'button', 'aria-label': 'Options for ' + t.name }, iconEl('more', 22)));
 }
-function renderList() {
+// The list is built only while the library is open (it is rebuilt when it opens); renderRows redoes just a few rows.
+let listDirty = true;
+function renderList(force = false) {
+  if (!force && !libOpen()) { listDirty = true; return; }
+  listDirty = false;
   const items = listFor(S.filter);
   el.list.hidden = el.listHead.hidden = items.length === 0;
   el.empty.hidden = items.length > 0;
@@ -3040,6 +3556,14 @@ function renderList() {
   el.listCount.textContent = plural(items.length, 'recording') + (total > 0 ? ` · ${fmtTime(total)}` : '');
   el.listMore.hidden = !(S.filter !== ALL || items.length >= 2);
   renderChipsCounts();
+}
+function renderRows(...ids) {                         // the playing marker, play count or flag count of these rows changed
+  if (listDirty || !libOpen()) { listDirty = true; return; }
+  const items = listFor(S.filter);
+  for (const id of ids) {
+    const i = id ? items.findIndex((t) => t.id === id) : -1, old = i >= 0 && el.list.querySelector(`.row[data-id="${CSS.escape(id)}"]`);
+    if (old) old.replaceWith(rowFor(items[i], i));
+  }
 }
 function renderChipsCounts() {
   const counts = el.folders.querySelectorAll('.fchip:not(.add) .n');
@@ -3070,7 +3594,8 @@ function renderNowPlaying() {
       el.npSub.textContent = i >= 0 && q.length > 1 ? `${where} · ${i + 1} of ${q.length}` : where;
     }
   }
-  document.title = t ? (standalone() ? t.name : `${t.name} — Echo Loop+ Touch`) : 'Echo Loop+ Touch';
+  const title = t ? (standalone() ? t.name : `${t.name} — Echo Loop+ Touch`) : 'Echo Loop+ Touch';
+  if (document.title !== title) document.title = title;
   el.playBtn.disabled = !S.tracks.length;
   [el.prevBtn, el.nextBtn, el.back5, el.fwd5].forEach((b) => { b.disabled = !t; });
   el.markBtn.disabled = !t || !!S.sec;
@@ -3199,21 +3724,33 @@ function flagLabel(f, all) {
   const sec = (x) => fmtTime(Math.round(x * 10) / 10), whole = sec(f.a);
   return all.some((o) => o !== f && sec(o.a) === whole) ? fmtPrecise(f.a) : whole;
 }
+function flagLabels(fl) {                         // flagLabel for every flag at once
+  const keys = fl.map((f) => fmtTime(Math.round(f.a * 10) / 10)), n = new Map();
+  for (const k of keys) n.set(k, (n.get(k) || 0) + 1);
+  return new Map(fl.map((f, i) => [f, f.label || (n.get(keys[i]) > 1 ? fmtPrecise(f.a) : keys[i])]));
+}
 function flagMeta(f) { return `${fmtPrecise(f.a)}–${fmtPrecise(f.b)} · ${fmtLen(f.b - f.a)} · ${fmtRate(f.rate || S.rate)}× · ${f.reps ? '×' + f.reps : '∞'}`; }
+let flagsKey = null;
 function renderFlags() {
   const t = current(), fl = flagsOf(t), linked = flagFor(S.sec);
-  const kids = [h('button', { class: 'fl all', type: 'button', 'data-act': 'list', 'aria-label': 'All flags of this recording' },
-    iconEl('flag', 15), 'Flags', fl.length ? h('span', { class: 'n', text: String(fl.length) }) : null)];
-  if (!fl.length) kids.push(h('span', { class: 'fl-hint', text: t ? 'Save a section and it appears here' : '' }));
-  fl.forEach((f, i) => kids.push(h('button', { class: 'fl' + (f === linked ? ' active' : ''), type: 'button', 'data-id': f.id,
-    'aria-label': `Loop flag ${flagLabel(f, fl)}, ${fmtPrecise(f.a)} to ${fmtPrecise(f.b)}` },
-    h('span', { class: 'fl-name', text: `${i + 1} · ${flagLabel(f, fl)}` }))));
-  el.flagRow.replaceChildren(...kids);
-  const on = el.flagRow.querySelector('.fl.active');
-  if (on) {                                        // bring the looping flag into view (sideways only)
+  const key = (t ? t.id : '') + '|' + fl.map((f) => `${f.id}:${f.a}:${f.b}:${f.label || ''}`).join(',');
+  if (key !== flagsKey) {                          // the flags themselves changed: rebuild the chips
+    flagsKey = key;
+    const names = flagLabels(fl);
+    const kids = [h('button', { class: 'fl all', type: 'button', 'data-act': 'list', 'aria-label': 'All flags of this recording' },
+      iconEl('flag', 15), 'Flags', fl.length ? h('span', { class: 'n', text: String(fl.length) }) : null)];
+    if (!fl.length) kids.push(h('span', { class: 'fl-hint', text: t ? 'Save a section and it appears here' : '' }));
+    fl.forEach((f, i) => kids.push(h('button', { class: 'fl', type: 'button', 'data-id': f.id,
+      'aria-label': `Loop flag ${names.get(f)}, ${fmtPrecise(f.a)} to ${fmtPrecise(f.b)}` },
+      h('span', { class: 'fl-name', text: `${i + 1} · ${names.get(f)}` }))));
+    el.flagRow.replaceChildren(...kids);
+  }
+  for (const b of el.flagRow.querySelectorAll('.fl[data-id]')) b.classList.toggle('active', !!linked && b.dataset.id === linked.id);
+  if (linked) requestAnimationFrame(() => {        // bring the looping flag into view (sideways only), measured with the next frame
+    const on = el.flagRow.querySelector('.fl.active'); if (!on) return;
     const r = el.flagRow.getBoundingClientRect(), c = on.getBoundingClientRect();
     if (c.left < r.left || c.right > r.right) el.flagRow.scrollLeft += c.left - r.left - (r.width - c.width) / 2;
-  }
+  });
   requestDraw();
 }
 const minsLeft = () => Math.max(1, Math.ceil((S.sleepAt - Date.now()) / 60000));
@@ -3239,6 +3776,7 @@ function renderAll() {
 function openLibrary() {
   closeSheet();
   el.libWrap.hidden = false;
+  if (listDirty) renderList(true);
   void el.lib.offsetWidth;                         // let the slide-in start from the edge
   el.libWrap.classList.add('open');
   renderChips();
@@ -3254,19 +3792,27 @@ const libOpen = () => !el.libWrap.hidden && el.libWrap.classList.contains('open'
 
 /* ================= sheets, dialogs, toast, busy ================= */
 let sheetResolve = null;
+let closeTok = 0;
 function openSheet(content, { dialog = false, full = false } = {}) {
+  closeTok++; el.sheetWrap.classList.remove('closing');   // a sheet still sliding away is replaced at once
+  if (el.sheet.scrollTop) el.sheet.scrollTop = 0;
   el.sheet.replaceChildren(...content.filter(Boolean));
   el.sheet.className = 'sheet' + (full ? ' full' : '');
-  el.sheet.style.transform = '';
+  el.sheet.style.transform = ''; el.sheet.style.transition = '';
   el.sheetWrap.classList.toggle('dialog', dialog);
   el.sheetWrap.hidden = false;
-  el.sheet.scrollTop = 0;
 }
 function closeSheet() {
-  if (el.sheetWrap.hidden) return;
-  el.sheetWrap.hidden = true;
-  el.sheet.replaceChildren();
+  if (el.sheetWrap.hidden || el.sheetWrap.classList.contains('closing')) return;
   if (sheetResolve) { const r = sheetResolve; sheetResolve = null; r(null); }
+  const tok = ++closeTok, done = () => {
+    if (tok !== closeTok) return;
+    el.sheetWrap.classList.remove('closing'); el.sheetWrap.hidden = true;
+    el.sheet.replaceChildren(); el.sheet.style.transform = ''; el.sheet.style.transition = '';
+  };
+  if (reduceMotion) { done(); return; }
+  el.sheetWrap.classList.add('closing');          // slides (or fades) away like a native sheet
+  setTimeout(done, el.sheetWrap.classList.contains('dialog') ? 170 : 230);
 }
 const grabber = () => h('div', { class: 'grabber', 'aria-hidden': 'true' });
 function actionSheet({ title, subtitle, actions }) {
@@ -3321,7 +3867,7 @@ function initSheetSwipe() {
     if (el.sheetWrap.classList.contains('dialog') || el.sheet.classList.contains('full')) return;
     const r = el.sheet.getBoundingClientRect();
     if (e.clientY - r.top > 44 || el.sheet.scrollTop > 0 || e.target.closest('input,button')) return;
-    y0 = e.clientY; dy = 0; id = e.pointerId;
+    y0 = e.clientY; dy = 0; id = e.pointerId; el.sheet.style.transition = '';
     try { el.sheet.setPointerCapture(e.pointerId); } catch (err) {}
   });
   el.sheet.addEventListener('pointermove', (e) => {
@@ -3332,7 +3878,8 @@ function initSheetSwipe() {
   const end = () => {
     if (y0 == null) return;
     y0 = null;
-    if (dy > 90) closeSheet(); else el.sheet.style.transform = '';
+    if (dy > 90) closeSheet();
+    else if (dy) { el.sheet.style.transition = 'transform .2s cubic-bezier(.2,.9,.25,1)'; el.sheet.style.transform = ''; }   // springs back
   };
   el.sheet.addEventListener('pointerup', end);
   el.sheet.addEventListener('pointercancel', end);
@@ -3656,7 +4203,7 @@ function saveSectionAsFlag() {
   t.flags = [...flagsOf(t), f].sort((x, y) => x.a - y.a);
   s.flagId = f.id;
   saveMeta(t); persist();
-  renderMode(); renderFlags(); renderList();
+  renderMode(); renderFlags(); renderRows(S.currentId);
   toast(`Flag ${t.flags.indexOf(f) + 1} saved — it’s in your flags and under the waveform`);
 }
 function openFlagSheet(f) {
@@ -3689,7 +4236,7 @@ function setFlagToSection(t, f) {
   t.flags.sort((x, y) => x.a - y.a);
   s.flagId = f.id;
   saveMeta(t); persist();
-  renderMode(); renderFlags(); renderList();
+  renderMode(); renderFlags(); renderRows(S.currentId);
   toast(`${flagLabel(f, flagsOf(t))} now covers ${fmtPrecise(s.a)}–${fmtPrecise(s.b)}`);
 }
 function deleteFlag(t, f) {
@@ -3697,7 +4244,7 @@ function deleteFlag(t, f) {
   t.flags = flagsOf(t).filter((x) => x !== f);
   if (S.sec && S.sec.flagId === f.id) S.sec.flagId = null;
   saveMeta(t); persist();
-  renderMode(); renderFlags(); renderList(); renderProgress();
+  renderMode(); renderFlags(); renderRows(S.currentId); renderProgress();
   toast('Flag deleted — Undo brings it back');
 }
 function clearFlags(t) {
@@ -3706,7 +4253,7 @@ function clearFlags(t) {
   t.flags = [];
   if (t.id === S.currentId && S.sec) S.sec.flagId = null;
   saveMeta(t); persist();
-  renderMode(); renderFlags(); renderList(); renderProgress();
+  renderMode(); renderFlags(); renderRows(S.currentId); renderProgress();
   toast('Flags deleted — Undo brings them back');
 }
 function openSecRepsSheet() {
@@ -3847,7 +4394,34 @@ const PAUSES = [{ mode: 'fixed', v: 1 }, { mode: 'fixed', v: 2 }, { mode: 'fixed
 const isSet = (t) => !!(t && t.recipe && t.recipe.kind === 'shuffle' && Array.isArray(t.recipe.items));
 
 /* ---------- building blocks ---------- */
-// Decode a whole recording. Long recordings use a lower rate to keep the iPhone's memory in check.
+// A recording opened for making a new file: reads any stretch of it, at any rate. MP3 and WAV are read a piece at a
+// time; other formats are decoded whole (long ones at a lower rate to keep the iPhone's memory in check).
+async function renderSource(t) {
+  const src = await getSource(t, 2);
+  if (src.kind !== 'whole') return { dur: src.nat / src.sr0, nch: src.stereo ? 2 : 1, read: (a, b, rate = RENDER_RATE) => readSeconds(src, a, b, rate) };
+  const full = await decodeForRender(t);
+  return { dur: full.len / full.rate, nch: full.ch.length, read: async (a, b, rate = RENDER_RATE) => takeSegment(full, a, b, rate) };
+}
+async function readSeconds(src, a, b, rate) {
+  const i0 = Math.round(a * rate), i1 = Math.max(i0, Math.round(b * rate)), out = [];
+  for (let c = 0; c < (src.stereo ? 2 : 1); c++) out.push(new Float32Array(i1 - i0));
+  for (let i = i0; i < i1; i += PAGE) { const f = await readRange(src, i, Math.min(i1, i + PAGE), rate); f.forEach((x, c) => out[c].set(x, i - i0)); }
+  return out;
+}
+// Writes [a, b) of a recording into w a minute at a time (fading in or out at the ends when asked).
+async function writeRange(w, R, a, b, rate, { fadeIn = 0, fadeOut = 0, mono = false } = {}) {
+  for (let x = a; x < b - 1e-6; x += 60) {
+    const e = Math.min(b, x + 60);
+    let chs = await R.read(x, e, rate);
+    if (mono && chs.length > 1) chs = [mixDown(chs[0], chs[1])];
+    if (fadeIn && x === a) fadeEdges(chs, fadeIn, 'in', rate);
+    if (fadeOut && e >= b) fadeEdges(chs, fadeOut, 'out', rate);
+    w.push(chs);
+  }
+}
+// New files longer than the memory allows at 44.1 kHz are written at a lower rate (a 2-hour one at 8 kHz).
+const OUT_BUDGET = 64e6;
+const outRateFor = (dur, nch = 1) => decodeRateFor(dur * nch, RENDER_RATE, OUT_BUDGET);
 async function decodeForRender(t) {
   const blob = S.blobs.get(t.id);
   if (!blob) throw new Error(`“${t.name}” is missing`);
@@ -3860,18 +4434,18 @@ async function decodeForRender(t) {
   if (c1) { let d = 0, s = 0; for (let i = 0; i < c0.length; i += 37) { d += Math.abs(c0[i] - c1[i]); s += Math.abs(c0[i]) + Math.abs(c1[i]); } stereo = d > s * 0.01; }
   return { rate: ab.sampleRate, len: ab.length, ch: stereo ? [c0, c1] : [c0] };
 }
-// Samples between a and b (seconds), at 44.1 kHz. Other rates are converted with cubic interpolation.
-function takeSegment(src, a, b) {
-  const r = src.rate, n = Math.max(0, Math.round((b - a) * RENDER_RATE));
+// Samples between a and b (seconds), at `rate`. Other rates are converted with cubic interpolation.
+function takeSegment(src, a, b, rate = RENDER_RATE) {
+  const r = src.rate, n = Math.max(0, Math.round((b - a) * rate));
   return src.ch.map((inp) => {
     const o = new Float32Array(n), L = inp.length;
-    if (r === RENDER_RATE) {
+    if (r === rate) {
       const k0 = Math.round(a * r);
       const s0 = clamp(k0, 0, L), s1 = clamp(k0 + n, 0, L);
       if (s1 > s0) o.set(inp.subarray(s0, s1), s0 - k0);
       return o;
     }
-    const step = r / RENDER_RATE, x0 = a * r, at = (k) => (k >= 0 && k < L ? inp[k] : 0);
+    const step = r / rate, x0 = a * r, at = (k) => (k >= 0 && k < L ? inp[k] : 0);
     for (let i = 0; i < n; i++) {
       const x = x0 + i * step, k = Math.floor(x), f = x - k;
       const p0 = at(k - 1), p1 = at(k), p2 = at(k + 1), p3 = at(k + 2);
@@ -3882,8 +4456,8 @@ function takeSegment(src, a, b) {
   });
 }
 // 5 ms fades at both ends, so no snippet starts or stops with a click.
-function fadeEdges(chs, sec = 0.005, ends = 'both') {
-  const n = chs[0] ? chs[0].length : 0, f = Math.min(Math.floor(n / 2), Math.round(sec * RENDER_RATE));
+function fadeEdges(chs, sec = 0.005, ends = 'both', rate = RENDER_RATE) {
+  const n = chs[0] ? chs[0].length : 0, f = Math.min(Math.floor(n / 2), Math.round(sec * rate));
   for (const o of chs) for (let i = 0; i < f; i++) {
     const g = 0.5 - 0.5 * Math.cos(Math.PI * (i + 0.5) / f);
     if (ends !== 'out') o[i] *= g;
@@ -3911,8 +4485,11 @@ function makeWriter(nch, rate = RENDER_RATE) {
   const chunks = [];
   let frames = 0;
   return {
-    nch,
+    nch, rate,
     get frames() { return frames; },
+    mark() { return { at: chunks.length, frames } },             // what was written since a mark can be written again
+    since(m) { return { list: chunks.slice(m.at), frames: frames - m.frames }; },
+    again(piece) { chunks.push(...piece.list); frames += piece.frames; },
     push(chs, gain = 1) {
       const n = chs[0].length, out = new Int16Array(n * nch);
       for (let c = 0; c < nch; c++) {
@@ -4011,12 +4588,12 @@ async function renderSet(items, o, target = null) {
       if (!t) continue;                                          // deleted since: its items are left out
       el.busyText.textContent = byTrack.size > 1 ? `Reading recording ${k} of ${byTrack.size}…` : 'Reading the recording…';
       await sleep(20);
-      const src = await decodeForRender(t), d = src.len / src.rate;
-      if (src.ch.length > 1) nOut = 2;
+      const R = await renderSource(t), d = R.dur;
+      if (R.nch > 1) nOut = 2;
       for (const i of idx) {
         const it = items[i], a = clamp(it.a, 0, d), b = clamp(it.b, a, d);
         if (b - a < 0.03) continue;
-        const chs = takeSegment(src, a, b);
+        const chs = await R.read(a, b);
         fadeEdges(chs);
         snips[i] = chs; gains[i] = o.level ? levelGain(chs) : 1;
       }
@@ -4162,14 +4739,13 @@ async function cropSection() {
   busy(true, 'Cropping…');
   try {
     await sleep(20);
-    const src = await decodeForRender(t), chs = takeSegment(src, a, b);
-    fadeEdges(chs);
-    const w = makeWriter(chs.length); w.push(chs);
+    const R = await renderSource(t), rate = outRateFor(len, R.nch), w = makeWriter(R.nch, rate);
+    await writeRange(w, R, a, b, rate, { fadeIn: 0.005, fadeOut: 0.005 });
     const now = Date.now();
     const flags = flagsOf(t).filter((f) => f.b > a + 0.01 && f.a < b - 0.01)
       .map((f, i) => ({ ...f, id: uid(), a: ms(Math.max(0, f.a - a)), b: ms(Math.min(len, f.b - a)), created: now + i }))
       .filter((f) => f.b - f.a >= MIN_SEC);
-    const meta = await addRenderedTrack(w.blob(), { name: `${t.name} (${fmtPrecise(a)}–${fmtPrecise(b)})`, folder: t.folder, flags, duration: w.frames / RENDER_RATE, order: orderAfter(t) });
+    const meta = await addRenderedTrack(w.blob(), { name: `${t.name} (${fmtPrecise(a)}–${fmtPrecise(b)})`, folder: t.folder, flags, duration: w.frames / rate, order: orderAfter(t) });
     busy(false);
     loadTrack(meta); renderAll(); persist();
     toast('Cropped copy opened — the original is unchanged, just above it in the library', 4000);
@@ -4185,29 +4761,29 @@ async function cutSection() {
   busy(true, 'Cutting…');
   try {
     await sleep(20);
-    const src = await decodeForRender(t), d = src.len / src.rate;
-    const left = a > 0.005 ? takeSegment(src, 0, a) : null, right = b < d - 0.005 ? takeSegment(src, b, d) : null;
+    const R = await renderSource(t), d = R.dur, left = a > 0.005, right = b < d - 0.005;
     if (!left && !right) throw new Error('nothing would be left');
-    const w = makeWriter(src.ch.length), X = Math.round(0.01 * RENDER_RATE);
+    const rate = outRateFor(d - (b - a), R.nch), w = makeWriter(R.nch, rate), X = Math.round(0.01 * rate), xs = X / rate;
     let overlap = 0;
-    if (left && right && left[0].length > 2 * X && right[0].length > 2 * X) {
+    if (left && right && a > 2 * xs && d - b > 2 * xs) {   // joined with a 10 ms crossfade
       overlap = X;
-      const L = left[0].length;
-      for (let c = 0; c < left.length; c++) for (let i = 0; i < X; i++) {
-        const g = 0.5 - 0.5 * Math.cos(Math.PI * (i + 0.5) / X);
-        left[c][L - X + i] = left[c][L - X + i] * (1 - g) + right[c][i] * g;
+      await writeRange(w, R, 0, a - xs, rate);
+      const lt = await R.read(a - xs, a, rate), rt = await R.read(b, b + xs, rate);
+      for (let c = 0; c < lt.length; c++) for (let i = 0, n = Math.min(lt[c].length, rt[c].length); i < n; i++) {
+        const g = 0.5 - 0.5 * Math.cos(Math.PI * (i + 0.5) / n);
+        lt[c][i] = lt[c][i] * (1 - g) + rt[c][i] * g;
       }
-      w.push(left);
-      w.push(right.map((ch) => ch.subarray(X)));
+      w.push(lt);
+      await writeRange(w, R, b + xs, d, rate);
     } else {
-      if (left) { fadeEdges(left, 0.005, 'out'); w.push(left); }
-      if (right) { fadeEdges(right, 0.005, 'in'); w.push(right); }
+      if (left) await writeRange(w, R, 0, a, rate, { fadeOut: 0.005 });
+      if (right) await writeRange(w, R, b, d, rate, { fadeIn: 0.005 });
     }
-    const shift = (b - a) + overlap / RENDER_RATE, now = Date.now();
+    const shift = (b - a) + overlap / rate, now = Date.now();
     const flags = flagsOf(t).filter((f) => f.b <= a + 0.001 || f.a >= b - 0.001)
       .map((f, i) => (f.a >= b - 0.001 ? { ...f, id: uid(), a: ms(Math.max(0, f.a - shift)), b: ms(Math.max(0, f.b - shift)), created: now + i } : { ...f, id: uid(), created: now + i }))
       .filter((f) => f.b - f.a >= MIN_SEC);
-    const meta = await addRenderedTrack(w.blob(), { name: `${t.name} (without ${fmtPrecise(a)}–${fmtPrecise(b)})`, folder: t.folder, flags, duration: w.frames / RENDER_RATE, order: orderAfter(t) });
+    const meta = await addRenderedTrack(w.blob(), { name: `${t.name} (without ${fmtPrecise(a)}–${fmtPrecise(b)})`, folder: t.folder, flags, duration: w.frames / rate, order: orderAfter(t) });
     busy(false);
     loadTrack(meta); renderAll(); persist();
     toast('Copy without that part opened — the original is unchanged, just above it in the library', 4000);
@@ -4252,9 +4828,8 @@ function exportSection() {
   const s = S.sec, t = current(); if (!s || !t) return;
   const a = s.a, b = s.b;
   saveWav(`${safeName(t.name)} ${fmtPrecise(a).replace(/:/g, '.')}-${fmtPrecise(b).replace(/:/g, '.')}.wav`, async () => {
-    const src = await decodeForRender(t), chs = takeSegment(src, a, b);
-    fadeEdges(chs);
-    const w = makeWriter(chs.length); w.push(chs);
+    const R = await renderSource(t), rate = outRateFor(b - a, R.nch), w = makeWriter(R.nch, rate);
+    await writeRange(w, R, a, b, rate, { fadeIn: 0.005, fadeOut: 0.005 });
     return w.blob();
   });
 }
@@ -4263,8 +4838,8 @@ function exportTrack(t) {
   const blob = S.blobs.get(t.id);
   saveWav(`${safeName(t.name)}.wav`, async () => {
     if (blob && /wav/i.test(blob.type || t.type || '')) return blob;            // already a WAV file
-    const src = await decodeForRender(t), chs = takeSegment(src, 0, src.len / src.rate);
-    const w = makeWriter(chs.length); w.push(chs);
+    const R = await renderSource(t), rate = outRateFor(R.dur, R.nch), w = makeWriter(R.nch, rate);
+    await writeRange(w, R, 0, R.dur, rate);
     return w.blob();
   });
 }
@@ -4279,18 +4854,12 @@ async function joinTracks(items, folder) {
     for (let i = 0; i < items.length; i++) {
       el.busyText.textContent = `Joining ${i + 1} of ${items.length}…`;
       await sleep(20);
-      const src = await decodeForRender(items[i]);
-      if (src.ch.length > 1) {                                   // joined tracks are mono: mix both channels
-        const L = src.ch[0], R = src.ch[1], m = new Float32Array(L.length);
-        for (let k = 0; k < L.length; k++) m[k] = (L[k] + R[k]) * 0.5;
-        src.ch = [m];
-      }
-      const chs = takeSegment(src, 0, src.len / src.rate);
-      fadeEdges(chs, 0.003);
-      for (let r = 0; r < repsOf(items[i]); r++) {
-        if (w.frames) w.silence(JOIN_GAP_SEC);
-        w.push(chs);
-      }
+      const R = await renderSource(items[i]);
+      if (w.frames) w.silence(JOIN_GAP_SEC);
+      const m = w.mark();                                        // joined tracks are mono: both channels mixed
+      await writeRange(w, R, 0, R.dur, RENDER_RATE, { fadeIn: 0.003, fadeOut: 0.003, mono: true });
+      const once = w.since(m);
+      for (let r = 1; r < repsOf(items[i]); r++) { w.silence(JOIN_GAP_SEC); w.again(once); }
       if (w.frames / RENDER_RATE > JOIN_MAX_MIN * 60) throw new Error(`longer than ${JOIN_MAX_MIN} minutes`);
     }
     const meta = await addRenderedTrack(w.blob(), { name: `${folder || 'All recordings'} (joined)`, folder, duration: w.frames / RENDER_RATE,
@@ -4553,6 +5122,7 @@ function wire() {
   }
   // Turning the phone: the layout changes; any touch in progress is let go and everything is redrawn for the new size.
   const onTurn = () => {
+    G.rect = null;
     if (dragState || G.mode) { endWaveDrag(null, true); G.pts.clear(); G.mode = null; G.pinch = null; clearTimeout(G.lp); }
     stopInertia(); hideLoupe(); renderTools(); renderZoomUI(); requestDraw();
   };
@@ -4637,11 +5207,13 @@ async function boot() {
   refreshOffline();
   setTimeout(() => {                                     // tidy the waveform cache: recordings deleted elsewhere, and older entries
     if (!db.conn) return;
-    waveDb.keys().then((ids) => {
-      const ix = waveIndex();
-      for (const id of ids) {
-        const t = byId(id);
+    waveDb.keys().then((keys) => {
+      const ix = waveIndex(), ids = [];
+      for (const key of keys) {
+        const id = String(key).split('|')[0], t = byId(id);
         if (!t) { forgetWave(id); continue; }
+        if (key !== id) continue;                          // an MP3 frame index: kept and dropped with its waveform
+        ids.push(id);
         if (!ix[id]) ix[id] = { t: 0, b: Math.round((t.duration || 60) * 32000) };
       }
       for (const id of Object.keys(ix)) if (!ids.includes(id)) delete ix[id];
@@ -4655,7 +5227,8 @@ if (/[?&]debug\b/.test(location.search)) {
   window.__elt = { S, V, U, G, audio, engine, el, zoomBy, setView, fitAll, durationOf, flagsOf, current, drawAll, playheadTime, viewGoal,
     wandAt, wandRange, splitSection, soundBlocks, snapTime, undo, redo, setTool, setDetect, startSection, exitSection, saveSectionAsFlag,
     buildOrder, randInt, renderSet, cropSection, cutSection, openShuffleBuilder, enginePosition, heardFrame, loadTrack, byId, setEdge, applySound,
-    keep, ctxRunning, tAtX, xOfT, hitSection, openLibrary, closeLibrary, isLandscape, offerFile };
+    keep, ctxRunning, tAtX, xOfT, hitSection, openLibrary, closeLibrary, isLandscape, offerFile,
+    makeSource, readRange, srcLen, decodeAt, pager, renderSource, pageFrom, edgesOf, xfFor };
 }
 boot();
 })();

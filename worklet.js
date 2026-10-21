@@ -2,8 +2,11 @@
 // It lives in its own file because WebKit — the engine inside every browser on iPhone — refuses
 // audio-thread code handed over as a "blob:" address, which is how the desktop app loads it.
 // Same engine as Echo Loop+ Desktop 2: seamless loops, 5 ms fades, slow-down that keeps the voice's pitch.
+// The recording arrives in pages of 2^20 samples, decoded around the playhead. When the sound is about to reach a
+// page that isn't here yet, it fades out, asks for it, and carries on the moment it arrives.
 /* global sampleRate, currentFrame, AudioWorkletProcessor, registerProcessor */
 const FADE_MS = 5;                                  // every start, stop, jump and loop seam fades over 5 ms
+const PAGE_SHIFT = 20, PAGE_MASK = (1 << PAGE_SHIFT) - 1;   // the same page size as index.html
 function herm(x, t) {                               // 4-point cubic interpolation (resampling)
   const c1 = 0.5 * (x[2] - x[0]), c2 = x[0] - 2.5 * x[1] + 2 * x[2] - 0.5 * x[3], c3 = 0.5 * (x[3] - x[0]) + 1.5 * (x[1] - x[2]);
   return ((c3 * t + c2) * t + c1) * t + x[1];
@@ -12,7 +15,7 @@ class ElpPlayer extends AudioWorkletProcessor {
   constructor(options) {
     super();
     this.sr = sampleRate;
-    this.ch = null; this.nch = 0; this.len = 0; this.srate = sampleRate; this.step = 1; this.id = null;
+    this.pg = null; this.nch = 0; this.len = 0; this.srate = sampleRate; this.step = 1; this.id = null;   // pg: pages per channel
     this.playing = false; this.stopping = false; this.rate = 1; this.mode = 0;   // mode 0: straight read, 1: time-stretch
     this.pos = 0; this.lastP = 0;
     this.looping = false; this.la = 0; this.lb = 0; this.left = -1; this.loopGen = 0;   // section loop; left = repeats still allowed (-1 = endless)
@@ -20,7 +23,8 @@ class ElpPlayer extends AudioWorkletProcessor {
     this.gain = 0; this.target = 0;
     this.fadeN = Math.max(16, Math.round(this.sr * FADE_MS / 1000)); this.fadeStep = 1 / this.fadeN;
     this.jumpTo = -1; this.jumpKind = ''; this.jumpSeq = 0;
-    this.repN = Math.round(this.sr * 0.02); this.rep = 0;
+    this.repN = Math.round(this.sr * 0.1); this.rep = 0;                         // where the sound is: 10 reports a second
+    this.wait = false; this.held = false; this.asked = -1; this.missing = -1; this.waitN = 0; this.ahead = 0;
     this.hL = new Float32Array(4); this.hR = new Float32Array(4); this.hP = new Float64Array(4); this.ph = 0; this.primed = false;
     this.sL = 0; this.sR = 0; this.sP = 0; this.oL = 0; this.oR = 0; this.oP = 0;
     this.N = 0; this.Hs = 0; this.D = 0; this.win = null; this.accL = null; this.accR = null;
@@ -31,6 +35,21 @@ class ElpPlayer extends AudioWorkletProcessor {
     if (o && Array.isArray(o.init)) for (const m of o.init) this.onMsg(m);
   }
   post(m) { m.id = this.id; this.port.postMessage(m); }   // every message says which recording it is about
+  at(c, k) { const p = this.pg[c][k >>> PAGE_SHIFT]; return p === undefined ? 0 : p[k & PAGE_MASK]; }   // 0 until its page arrives
+  // Is everything the next stretch of sound needs already here? Pages are far longer than this window.
+  ready() {
+    const at = this.mode ? Math.round(this.ax) : this.pos;
+    const lo = Math.max(0, at - this.N - 2 * this.D), hi = Math.min(this.len - 1, at + this.N + 2 * this.D + this.ahead);
+    const p0 = this.pg[0];
+    for (let k = lo >>> PAGE_SHIFT, e = hi >>> PAGE_SHIFT; k <= e && hi >= lo; k++) if (p0[k] === undefined) { this.missing = k; return false; }
+    return true;
+  }
+  // The sound is about to run into a page that hasn't arrived: fade out, hold the place, and ask for it.
+  startWait() {
+    this.wait = true; this.target = 0; this.waitN = 0;
+    if (this.missing !== this.asked) { this.asked = this.missing; this.post({ type: 'need', page: this.missing }); }
+  }
+  endWait() { this.wait = false; this.asked = -1; if (this.playing && !this.stopping && this.jumpTo < 0) this.target = 1; }
   setupStretch() {
     const sr = this.srate;
     let N = Math.round(sr * 0.032); N += N & 1;                                   // 32 ms frames, 50 % overlap
@@ -55,14 +74,14 @@ class ElpPlayer extends AudioWorkletProcessor {
     this.resetAt(to);
     if (kind === 'wrap' && this.left > 0) this.left--;
     this.post({ type: 'jump', kind, frame, pos: to / this.srate, rate: this.mode ? this.rate : 1, seq: kind === 'seek' ? this.jumpSeq : 0, gen: kind === 'wrap' ? this.loopGen : 0 });
-    if (this.playing && !this.stopping) this.target = 1;
+    if (this.playing && !this.stopping) { if (this.ready()) { this.wait = false; this.target = 1; } else this.startWait(); }
   }
   // Waveform-similarity overlap-add: slows speech down or speeds it up without changing the voice's pitch.
   bestDelta(xk, nat) {
-    const D = this.D, N = this.N, len = this.len, c0 = this.ch[0], c1 = this.nch > 1 ? this.ch[1] : null, sb = this.sBuf, nb = this.nBuf;
+    const D = this.D, N = this.N, len = this.len, st = this.nch > 1, sb = this.sBuf, nb = this.nBuf;
     const base0 = xk - D, span = 2 * D + N;
-    for (let i = 0; i < span; i++) { const k = base0 + i; sb[i] = k >= 0 && k < len ? (c1 ? c0[k] + c1[k] : c0[k]) : 0; }
-    for (let j = 0; j < N; j++) { const k = nat + j; nb[j] = k >= 0 && k < len ? (c1 ? c0[k] + c1[k] : c0[k]) : 0; }
+    for (let i = 0; i < span; i++) { const k = base0 + i; sb[i] = k >= 0 && k < len ? (st ? this.at(0, k) + this.at(1, k) : this.at(0, k)) : 0; }
+    for (let j = 0; j < N; j++) { const k = nat + j; nb[j] = k >= 0 && k < len ? (st ? this.at(0, k) + this.at(1, k) : this.at(0, k)) : 0; }
     let best = 0, bestV = -Infinity;
     for (let d = 0; d <= 2 * D; d += 4) {
       let acc = 0;
@@ -79,21 +98,20 @@ class ElpPlayer extends AudioWorkletProcessor {
     return fine - D;
   }
   stretchFrame() {
-    const N = this.N, Hs = this.Hs, len = this.len, w = this.win, aL = this.accL, aR = this.accR;
-    const c0 = this.ch[0], c1 = this.nch > 1 ? this.ch[1] : null;
+    const N = this.N, Hs = this.Hs, len = this.len, w = this.win, aL = this.accL, aR = this.accR, st = this.nch > 1;
     const xk = Math.round(this.ax), first = !this.havePrev;
     const s = first ? xk : xk + this.bestDelta(xk, this.prevNat);
     for (let j = 0; j < N; j++) {
       const k = s + j;
       // the first frame after a jump starts at full level (the 5 ms gain ramp keeps it click-free), so onsets stay crisp
-      if (k >= 0 && k < len) { const v = first && j < Hs ? 1 : w[j]; aL[j] += v * c0[k]; if (c1) aR[j] += v * c1[k]; }
+      if (k >= 0 && k < len) { const v = first && j < Hs ? 1 : w[j]; aL[j] += v * this.at(0, k); if (st) aR[j] += v * this.at(1, k); }
     }
     // Positions follow the nominal timeline (exactly `rate` per sample), so loops keep an exact length and the
     // playhead moves evenly; the audio itself is aligned within ±10 ms of it.
     const sc = 1 / 32768, ax = this.ax, r = this.rate;
-    for (let j = 0; j < Hs; j++) { const l = aL[j] * sc; this.fL[j] = l; this.fR[j] = c1 ? aR[j] * sc : l; this.fP[j] = ax + j * r; }
+    for (let j = 0; j < Hs; j++) { const l = aL[j] * sc; this.fL[j] = l; this.fR[j] = st ? aR[j] * sc : l; this.fP[j] = ax + j * r; }
     aL.copyWithin(0, Hs); aL.fill(0, N - Hs);
-    if (c1) { aR.copyWithin(0, Hs); aR.fill(0, N - Hs); }
+    if (st) { aR.copyWithin(0, Hs); aR.fill(0, N - Hs); }
     this.fHead = 0; this.fLen = Hs;
     this.prevNat = s + Hs; this.havePrev = true;
     this.ax += Hs * this.rate;
@@ -101,7 +119,7 @@ class ElpPlayer extends AudioWorkletProcessor {
   streamNext() {                                    // next sample at the recording's own sample rate
     if (this.mode === 0) {
       const i = this.pos;
-      if (i >= 0 && i < this.len) { const a = this.ch[0][i] / 32768; this.sL = a; this.sR = this.nch > 1 ? this.ch[1][i] / 32768 : a; }
+      if (i >= 0 && i < this.len) { const a = this.at(0, i) / 32768; this.sL = a; this.sR = this.nch > 1 ? this.at(1, i) / 32768 : a; }
       else { this.sL = 0; this.sR = 0; }
       this.sP = i; this.pos = i + 1;
       return;
@@ -134,23 +152,34 @@ class ElpPlayer extends AudioWorkletProcessor {
   onMsg(m) {
     switch (m.t) {
       case 'load':
-        this.ch = m.ch; this.nch = m.ch.length; this.len = m.len; this.srate = m.srate; this.step = m.srate / this.sr; this.id = m.id;
+        this.pg = [[], []]; this.nch = m.nch; this.len = m.len; this.srate = m.srate; this.step = m.srate / this.sr; this.id = m.id;
+        this.ahead = Math.ceil(this.fadeN * this.step * 2) + 64;                 // a fade at the fastest speed
+        this.wait = false; this.held = false; this.asked = -1; this.waitN = 0;
         this.setupStretch();
         this.playing = false; this.stopping = false; this.gain = 0; this.target = 0; this.jumpTo = -1; this.looping = false;
         this.mode = this.rate === 1 ? 0 : 1;
         this.resetAt(Math.max(0, Math.min(this.len, Math.round((m.pos || 0) * this.srate))));
         this.post({ type: 'loaded', id: m.id });
         break;
-      case 'unload': this.ch = null; this.playing = false; this.len = 0; this.id = null; break;
+      case 'page':
+        if (!this.pg || m.id !== this.id) break;
+        this.pg[0][m.k] = m.ch[0]; if (this.nch > 1) this.pg[1][m.k] = m.ch[1] || m.ch[0];
+        if (this.wait && this.ready()) this.endWait();
+        break;
+      case 'drop':
+        if (!this.pg || m.id !== this.id) break;
+        for (const k of m.ks) { this.pg[0][k] = undefined; this.pg[1][k] = undefined; }
+        break;
+      case 'unload': this.pg = null; this.playing = false; this.len = 0; this.id = null; this.wait = false; break;
       case 'play':
-        if (!this.ch) break;
+        if (!this.pg) break;
         this.playing = true; this.stopping = false;
         if (this.jumpTo < 0) this.target = 1;
         this.post({ type: 'playing', frame: currentFrame, pos: this.lastP / this.srate, rate: this.mode ? this.rate : 1 });
         break;
       case 'pause': if (this.playing) { this.stopping = true; this.target = 0; } break;
       case 'seek': {
-        if (!this.ch) break;
+        if (!this.pg) break;
         this.jumpSeq = m.seq || 0;
         const to = Math.round(m.pos * this.srate);
         if (this.playing && !this.stopping && this.gain > 0) this.schedule(to, 'seek');
@@ -160,11 +189,13 @@ class ElpPlayer extends AudioWorkletProcessor {
       case 'rate': {
         const r = m.r, wasStraight = this.mode === 0, oldRate = wasStraight ? 1 : this.rate;
         this.rate = r;
-        if (wasStraight !== (r === 1) && this.ch) {
+        if (wasStraight !== (r === 1) && this.pg) {
           if (this.playing && this.gain > 0 && this.jumpTo < 0) {
             // switch between straight playback and time-stretching where the fade-out ends, so nothing repeats
             this.schedule(this.lastP + this.fadeN * this.step * oldRate, 'mode');
           } else if (this.jumpTo < 0) { this.mode = r === 1 ? 0 : 1; this.resetAt(Math.round(this.lastP)); }
+        } else if (this.pg && this.playing && !this.held && this.mode) {
+          this.post({ type: 'pos', frame: currentFrame, pos: this.lastP / this.srate, rate: this.rate });   // the new speed, at once
         }
         break;
       }
@@ -175,15 +206,26 @@ class ElpPlayer extends AudioWorkletProcessor {
   }
   process(inputs, outputs) {
     const out = outputs[0], L = out[0], R = out[1] || null, n = L.length;
-    if (!this.ch) { L.fill(0); if (R) R.fill(0); return true; }
+    if (!this.pg) { L.fill(0); if (R) R.fill(0); return true; }
+    if (this.playing && !this.stopping && this.jumpTo < 0) {
+      if (this.ready()) { if (this.wait) this.endWait(); }
+      else if (!this.wait) this.startWait();
+      else { this.target = 0; if ((this.waitN += n) >= this.sr) { this.asked = -1; this.startWait(); } }   // still missing after a second: ask again
+    }
     for (let i = 0; i < n; i++) {
       if (this.gain < this.target) { this.gain += this.fadeStep; if (this.gain > this.target) this.gain = this.target; }
       else if (this.gain > this.target) { this.gain -= this.fadeStep; if (this.gain < this.target) this.gain = this.target; }
       if (this.gain <= 0) {
         if (this.jumpTo >= 0) this.doJump(currentFrame + i);
-        if (this.stopping) { this.stopping = false; this.playing = false; this.post({ type: 'paused', frame: currentFrame + i, pos: this.lastP / this.srate }); }
+        if (this.stopping) { this.stopping = false; this.playing = false; this.held = false; this.post({ type: 'paused', frame: currentFrame + i, pos: this.lastP / this.srate }); }
+        if (this.wait && this.playing) {                                           // holding until the page arrives
+          if (!this.held) { this.held = true; this.post({ type: 'pos', frame: currentFrame + i, pos: this.lastP / this.srate, rate: 0 }); }
+          L[i] = 0; if (R) R[i] = 0;
+          continue;
+        }
       }
       if (!this.playing) { L[i] = 0; if (R) R[i] = 0; continue; }
+      if (this.held) { this.held = false; this.rep = 0; this.post({ type: 'pos', frame: currentFrame + i, pos: this.lastP / this.srate, rate: this.mode ? this.rate : 1 }); }
       this.outNext();
       const p = this.oP;
       if (this.jumpTo < 0 && !this.stopping) {

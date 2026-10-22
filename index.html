@@ -1103,6 +1103,7 @@ const engine = {
   queue: [], listeners: new Map(), tick: 0, loadResolve: null, loadId: null, loopGen: -1,
   stale: false, bornAt: 0,                               // stale: iOS stopped this engine itself, the next Play on screen starts a fresh one
   outOn: false, wasIntr: false,                          // outOn: its sound goes out (outputOn); wasIntr: a call or another app interrupted it
+  dead: false,                                           // iOS froze the app while paused: this engine's way to the speaker is gone
 };
 // The same code as worklet.js, filled in when index.html is built. Used only when worklet.js can't be loaded
 // (a computer opening index.html straight from a folder); iPhone always uses the file.
@@ -1153,7 +1154,7 @@ let keepSrc = '', keepLen = 0, keepMirror = true, mirrorAt = 0, keepOwnAt = 0;  
 const playKeep = () => { try { const p = keep.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
 function keepReady(d) {                                   // a silent track longer than the recording, so it never loops while it plays
   const want = Math.max(4 * 3600, (d || 0) + 600);
-  if (!keepMirror || keepLen >= want) return;
+  if (fb || !keepMirror || keepLen >= want) return;
   const old = keepSrc, playing = !!old && !keep.paused;
   keepLen = Math.ceil(want / 3600) * 3600; keepSrc = silentMp3(keepLen);
   keepOwnAt = performance.now(); keep.src = keepSrc; keep.loop = true; mirrorTo(audio.currentTime || 0, true);
@@ -1161,6 +1162,7 @@ function keepReady(d) {                                   // a silent track long
   if (playing) playKeep();
 }
 function keepAlive(on) {
+  if (fb) return;                                        // it is playing the recording itself
   if (on) {
     keepReady(durationOf());
     mirrorRate();
@@ -1169,6 +1171,7 @@ function keepAlive(on) {
   } else if (!keep.paused) { keepOwnAt = performance.now(); try { keep.pause(); } catch (e) {} }
 }
 keep.addEventListener('error', () => {                     // this iPhone can't play the silent MP3: the old 8 s loop keeps the app awake
+  if (fb) { slg('the locked-screen player could not play this recording'); fbStop(); emit('pause'); toast('Unlock the iPhone to carry on with this recording', 4000); return; }
   if (!keepMirror || !keepSrc) return;
   const old = keepSrc;
   keepMirror = false; keepSrc = silentWav(); keepOwnAt = performance.now(); keep.src = keepSrc; keep.loop = true; URL.revokeObjectURL(old);
@@ -1176,7 +1179,7 @@ keep.addEventListener('error', () => {                     // this iPhone can't 
 });
 // Moves the silent track to `pos`: at once when forced or far off, otherwise at most once a second (very short loops).
 function mirrorTo(pos, force = false) {
-  if (!keepMirror || !keepSrc || !(pos >= 0)) return;
+  if (fb || !keepMirror || !keepSrc || !(pos >= 0)) return;
   const off = Math.abs((keep.currentTime || 0) - pos);
   if (off < 0.05 || (!force && off < 2 && performance.now() - mirrorAt < 1000)) return;
   if (isFinite(keep.duration) && pos > keep.duration - 1) return;
@@ -1193,6 +1196,7 @@ const syncKeepAlive = () => keepAlive(engine.playing || engine.wantPlay);
 // from the sound engine's own state (onCtxState), or here if that never changes.
 let stopCheck = 0;
 keep.addEventListener('pause', () => {
+  if (fb) { if (fb.playing && performance.now() - keepOwnAt >= 1000 && !keep.ended) { fb.at = keep.currentTime; fb.playing = false; slg('iOS paused the locked-screen player'); emit('pause'); } return; }
   if (performance.now() - keepOwnAt < 1000 || !(engine.playing || engine.wantPlay)) return;
   engine.stale = true;
   if (!engine.playing) { systemStop(); return; }          // still opening: it doesn't start by itself
@@ -1200,6 +1204,94 @@ keep.addEventListener('pause', () => {
   stopCheck = setTimeout(() => { stopCheck = 0; if (keep.paused && (engine.playing || engine.wantPlay) && !ctxInterrupted()) systemStop(); }, 600);
 });
 keep.addEventListener('playing', () => { if (engine.ctx && !ctxRunning() && (engine.playing || engine.wantPlay || kickTimer)) ctxResume(); });
+// With the screen locked, once iOS has frozen the paused app, Safari's sound engine can't be started again (the sound
+// came back only after the app was opened), but an ordinary audio element can, as in podcast sites. So a Play from the
+// Lock Screen or the earphones then plays the recording through the silent track's element itself, from the same place
+// at the same speed; section loops are kept to about a quarter of a second. The first touch in the app after unlocking
+// goes back to the sound engine (a fresh one) at the same place.
+let fb = null;                                           // { id, url, playing, at } while the element plays the recording
+let beatWall = Date.now();
+setInterval(() => {                                      // a long gap between ticks: iOS froze the app
+  const now = Date.now();
+  if (now - beatWall > 5000 && !engine.playing && engine.ctx) {
+    if (!engine.dead) slg(`iOS froze the app for ${Math.round((now - beatWall) / 1000)} s: its sound engine is lost`);
+    engine.dead = true; engine.stale = true;
+  }
+  beatWall = now;
+}, 1000);
+const needsFallback = () => document.visibilityState === 'hidden' && !!current() && S.blobs.has(S.currentId)
+  && (engine.dead || engine.stale || (!!engine.ctx && !ctxRunning()));
+const fbTime = () => (!fb ? 0 : keep.readyState >= 1 ? keep.currentTime : fb.at);
+function fbStart(t, at) {
+  const blob = t && S.blobs.get(t.id);
+  if (!blob) return false;
+  if (fb && fb.id !== t.id) fbStop();
+  if (!fb) {
+    const url = URL.createObjectURL(blob);
+    fb = { id: t.id, url, playing: false, at: at || 0 };
+    slg(`locked-screen player starts ${t.name} at ${fmtPrecise(fb.at)} ${slgState()}`);
+    keepOwnAt = performance.now();
+    keep.loop = false; keep.defaultPlaybackRate = effRate();
+    keep.src = url;
+    try { keep.preservesPitch = true; keep.webkitPreservesPitch = true; } catch (e) {}
+    keep.playbackRate = effRate();
+    try { keep.currentTime = fb.at; } catch (e) {}
+    keep.addEventListener('loadedmetadata', () => {
+      if (!fb || fb.url !== url) return;
+      if (Math.abs(keep.currentTime - fb.at) > 0.3) try { keep.currentTime = fb.at; } catch (e) {}
+      keep.playbackRate = effRate();
+    }, { once: true });
+  }
+  fbPlay();
+  return true;
+}
+function fbPlay() {
+  if (!fb) return Promise.resolve();
+  if (!fb.playing) { fb.playing = true; playKeep(); emit('play'); updatePositionState(); }
+  else playKeep();
+  return Promise.resolve();
+}
+function fbPause() {
+  if (!fb || !fb.playing) return;
+  fb.at = fbTime(); fb.playing = false;
+  keepOwnAt = performance.now(); try { keep.pause(); } catch (e) {}
+  emit('pause');
+}
+function fbSeek(t) { if (!fb) return; fb.at = t; try { keep.currentTime = t; } catch (e) {} }
+function fbStop() {                                      // back to the silent track
+  if (!fb) return;
+  const url = fb.url; fb = null;
+  keepOwnAt = performance.now();
+  try { keep.pause(); } catch (e) {}
+  keep.src = keepSrc; keep.loop = true; mirrorRate();
+  URL.revokeObjectURL(url);
+}
+// The first touch in the app after unlocking: the sound engine takes over again, a fresh one, at the same place.
+function fbExit() {
+  if (!fb) return;
+  const pos = fbTime(), playing = fb.playing, id = fb.id;
+  slg(`back to the sound engine at ${fmtPrecise(pos)}${playing ? ', playing' : ''}`);
+  fbStop();
+  if (id === S.currentId) { if (engReady()) engineSeek(pos); else pendingSeek = pos; }
+  if (playing) playNow(); else { renderPlayState(); updatePositionState(); }
+}
+for (const type of ['pointerup', 'keydown']) window.addEventListener(type, () => { if (fb && document.visibilityState === 'visible') fbExit(); }, { capture: true });
+keep.addEventListener('timeupdate', () => {
+  if (!fb || !fb.playing) return;
+  const sec = S.sec;
+  if (sec && !editDrag && keep.currentTime >= sec.b - 0.02) {     // the section loop, as near as the element allows
+    if (sec.reps && sec.pass >= sec.reps) onLoopDone();
+    else { try { keep.currentTime = sec.a; } catch (e) {} onSectionWrap(); }
+  }
+  emit('timeupdate');
+});
+keep.addEventListener('ended', () => {
+  if (!fb) return;
+  if (audio.loop && !S.sec) { try { keep.currentTime = 0; } catch (e) {} playKeep(); onFileWrap(); return; }
+  fb.playing = false; fb.at = 0;
+  emit('ended');
+});
+keep.addEventListener('playing', () => { if (fb && !fb.playing) { fb.playing = true; emit('play'); } });
 function setAudioSession() {
   // iOS 17+: this is media playback — sound with the silent switch on, and it keeps going with the screen locked
   try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) {}
@@ -1362,7 +1454,7 @@ function systemStop() {
 }
 // A fresh sound engine on today's output, the same recording from the same place (openTrack does the rest).
 function engineReset() {
-  engine.stale = false;
+  engine.stale = false; engine.dead = false;
   const { ctx, node } = engine;
   if (!ctx) return;
   slg('a fresh engine replaces the old one');
@@ -1527,19 +1619,20 @@ function engineLoad(id, src, whole, rate, len, startAt) {
 // gen identifies the section, so a repeat that was already on its way for an earlier section is ignored.
 function engineSetLoop(a, b, left, gen) { gen = gen | 0; engine.loopGen = gen; enginePost({ t: 'loop', a, b, left, gen }); pagerPin(a); }
 function engineClearLoop() { engine.loopGen = -1; enginePost({ t: 'noloop' }); pager.pins = []; }
+const fbDuration = () => (isFinite(keep.duration) && keep.duration > 0 ? keep.duration : (current() && current().duration) || NaN);
 const audio = {
-  get currentTime() { return enginePosition(); },
-  set currentTime(t) { engineSeek(t); },
-  get duration() { return engReady() ? engine.duration : NaN; },
-  get paused() { return !engine.playing; },
-  get ended() { return engine.ended; },
-  get readyState() { return engReady() ? 4 : 0; },
+  get currentTime() { return fb ? fbTime() : enginePosition(); },
+  set currentTime(t) { if (fb) fbSeek(t); else engineSeek(t); },
+  get duration() { return fb ? fbDuration() : engReady() ? engine.duration : NaN; },
+  get paused() { return fb ? !fb.playing : !engine.playing; },
+  get ended() { return fb ? keep.ended : engine.ended; },
+  get readyState() { return fb || engReady() ? 4 : 0; },
   get loop() { return engine.fileLoop; },
   set loop(v) { v = !!v; if (engine.fileLoop !== v) { engine.fileLoop = v; enginePost({ t: 'fileLoop', on: v }); } },
   get playbackRate() { return engine.rate; },
   set playbackRate(r) { if (engine.rate !== r) { engine.rate = r; enginePost({ t: 'rate', r }); emit('ratechange'); } },
-  play() { return enginePlay(); },
-  pause() { enginePause(); },
+  play() { return fb ? fbPlay() : enginePlay(); },
+  pause() { if (fb) fbPause(); else enginePause(); },
   addEventListener(type, fn) { if (!engine.listeners.has(type)) engine.listeners.set(type, []); engine.listeners.get(type).push(fn); },
 };
 
@@ -2154,6 +2247,9 @@ function seekAndLoop(t) { seekTo(t); syncEngineLoop(); }
 function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
   if (!t) return;
   if (!S.blobs.get(t.id)) { toast('That recording is missing'); return; }
+  const viaFb = autoplay && (!!fb || needsFallback());   // screen locked, engine lost: the next one plays the same way
+  if (fb) fbStop();
+  if (viaFb) autoplay = false;
   const same = engine.id === t.id && engine.loaded, prevId = S.currentId;
   S.currentId = t.id; S.pass = 1; S.sec = null; S.mark = null;
   pendingSeek = startAt > 0.5 ? startAt : null;
@@ -2172,6 +2268,7 @@ function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
     openTrack(t, autoplay);
     tellLockScreen(t.duration, pendingSeek || 0);         // its own length on the Lock Screen while it opens
   }
+  if (viaFb) fbStart(t, from);
   persist();
 }
 // If the app closes unexpectedly (iOS out of memory, say) while a recording is being opened or its waveform made, that
@@ -2232,6 +2329,7 @@ function onLoaded() {
   updatePositionState(); renderNowPlaying(); renderProgress(); renderMode();
 }
 function playNow() {
+  if (fb) { fbPlay(); return; }
   userPlayIntent();
   if (!current()) {
     const q = listFor(S.filter).length ? listFor(S.filter) : S.tracks;
@@ -2262,7 +2360,7 @@ function togglePlay() {
   if (audio.paused) playNow(); else audio.pause();
 }
 function seekTo(t) {
-  if (!engReady()) { pendingSeek = t; requestDraw(); return; }
+  if (!fb && !engReady()) { pendingSeek = t; requestDraw(); return; }
   t = clamp(t, 0, Math.max(0, audio.duration - 0.02));
   audio.currentTime = t;
   renderProgress(); updatePositionState();
@@ -3723,7 +3821,10 @@ const idle = () => el.busy.hidden;                       // false while somethin
 function setupMediaSession() {
   if (!MS) return;
   const on = (action, fn) => { try { MS.setActionHandler(action, (d) => { tapAt = performance.now(); slg(`Lock Screen / earphones: ${action}${action === 'seekto' && d ? ' ' + fmtPrecise(d.seekTime) : ''} ${slgState()}`); if (idle()) fn(d); }); } catch (e) {} };
-  on('play', () => { if (!audio.paused && !ctxRunning() && !engine.stale) userPlayIntent(); else playNow(); });
+  on('play', () => {
+    if (!fb && needsFallback()) { fbStart(current(), engine.ended ? 0 : (audio.currentTime || 0)); return; }
+    if (!fb && !audio.paused && !ctxRunning() && !engine.stale) userPlayIntent(); else playNow();
+  });
   on('pause', () => audio.pause());
   on('stop', () => { engine.stale = true; audio.pause(); });   // the earphones' Stop: the next Play starts a fresh engine
   on('previoustrack', () => goPrev());
@@ -5424,6 +5525,7 @@ function wire() {
       readColors(); applyRate(); checkSleep(); renderPlayState(); renderCount(); renderSleep(); renderNowPlaying(); renderList(); renderMode();
       if (!audio.paused) startRAF(); else if (ctxRunning() && !engine.wantPlay) goIdle();
       refreshOffline(); refreshLibrary();
+      if (fb && !fb.playing) fbExit();
     } else { persist(); if (audio.paused && !engine.wantPlay) keepWarm(); }
     slg(`screen: app ${document.visibilityState} ${slgState()}`);
   });

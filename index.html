@@ -1099,6 +1099,7 @@ const engine = {
   playing: false, ended: false, rate: 1, fileLoop: false, wantPlay: false,
   hist: [], lastPos: 0, seekTarget: null, seekSeq: 0, seekFrame: -1,
   queue: [], listeners: new Map(), tick: 0, loadResolve: null, loadId: null, loopGen: -1,
+  stale: false, bornAt: 0,                               // stale: iOS stopped this engine itself, the next Play starts a fresh one
 };
 // The same code as worklet.js, filled in when index.html is built. Used only when worklet.js can't be loaded
 // (a computer opening index.html straight from a folder); iPhone always uses the file.
@@ -1132,14 +1133,14 @@ function silentWav() {                     // 8 s of silence, looped: the fallba
   str(36, 'data'); v.setUint32(40, n * 2, true);
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
-let keepSrc = '', keepLen = 0, keepMirror = true, mirrorAt = 0;
+let keepSrc = '', keepLen = 0, keepMirror = true, mirrorAt = 0, keepOwnAt = 0;   // keepOwnAt: when the app last paused or reloaded it
 const playKeep = () => { try { const p = keep.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
 function keepReady(d) {                                   // a silent track longer than the recording, so it never loops while it plays
   const want = Math.max(4 * 3600, (d || 0) + 600);
   if (!keepMirror || keepLen >= want) return;
   const old = keepSrc, playing = !!old && !keep.paused;
   keepLen = Math.ceil(want / 3600) * 3600; keepSrc = silentMp3(keepLen);
-  keep.src = keepSrc; keep.loop = true; mirrorTo(audio.currentTime || 0, true);
+  keepOwnAt = performance.now(); keep.src = keepSrc; keep.loop = true; mirrorTo(audio.currentTime || 0, true);
   if (old) URL.revokeObjectURL(old);
   if (playing) playKeep();
 }
@@ -1149,12 +1150,12 @@ function keepAlive(on) {
     mirrorRate();
     if (keep.paused) mirrorTo(audio.currentTime || 0, true);
     playKeep();                                           // even when it already plays: it must stay the sound the Lock Screen talks to
-  } else if (!keep.paused) { try { keep.pause(); } catch (e) {} }
+  } else if (!keep.paused) { keepOwnAt = performance.now(); try { keep.pause(); } catch (e) {} }
 }
 keep.addEventListener('error', () => {                     // this iPhone can't play the silent MP3: the old 8 s loop keeps the app awake
   if (!keepMirror || !keepSrc) return;
   const old = keepSrc;
-  keepMirror = false; keepSrc = silentWav(); keep.src = keepSrc; keep.loop = true; URL.revokeObjectURL(old);
+  keepMirror = false; keepSrc = silentWav(); keepOwnAt = performance.now(); keep.src = keepSrc; keep.loop = true; URL.revokeObjectURL(old);
   if (engine.playing || engine.wantPlay) playKeep();
 });
 // Moves the silent track to `pos`: at once when forced or far off, otherwise at most once a second (very short loops).
@@ -1171,6 +1172,17 @@ function mirrorRate() {
 }
 const mirrorOff = (p) => (keepMirror && keepSrc && !keep.paused && !keep.seeking && keep.readyState >= 1 ? Math.abs((keep.currentTime || 0) - p) : 0);
 const syncKeepAlive = () => keepAlive(engine.playing || engine.wantPlay);
+// iOS paused the silent track itself: the earphones went away (out of range, switched off, unplugged), or a call, Siri or
+// an alarm came in. Either way the next Play starts a fresh sound engine; what else to do is clear a moment later,
+// from the sound engine's own state (onCtxState), or here if that never changes.
+let stopCheck = 0;
+keep.addEventListener('pause', () => {
+  if (performance.now() - keepOwnAt < 1000 || !(engine.playing || engine.wantPlay)) return;
+  engine.stale = true;
+  if (!engine.playing) { systemStop(); return; }          // still opening: it doesn't start by itself
+  clearTimeout(stopCheck);
+  stopCheck = setTimeout(() => { stopCheck = 0; if (keep.paused && (engine.playing || engine.wantPlay) && !ctxInterrupted()) systemStop(); }, 600);
+});
 function setAudioSession() {
   // iOS 17+: this is media playback — sound with the silent switch on, and it keeps going with the screen locked
   try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) {}
@@ -1183,8 +1195,8 @@ function engineInit() {
   setAudioSession();
   let ctx;
   try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { return fail(e); }
-  engine.ctx = ctx;
-  try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) {}   // still inside the tap
+  engine.ctx = ctx; engine.bornAt = performance.now();
+  ctxResume();                                           // still inside the tap
   ctx.onstatechange = onCtxState;
   engine.initP = (async () => {
     let loaded = false, lastErr = null;
@@ -1195,6 +1207,7 @@ function engineInit() {
       try { await ctx.audioWorklet.addModule(url); loaded = true; break; } catch (e) { lastErr = e; }
     }
     if (!loaded) { try { ctx.close(); } catch (e) {} throw lastErr || new Error('the sound engine could not be loaded'); }
+    if (engine.ctx !== ctx) return;                       // replaced by a fresh engine meanwhile (engineReset)
     const node = new AudioWorkletNode(ctx, 'elp-player', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     const hp1 = ctx.createBiquadFilter(), hp2 = ctx.createBiquadFilter(), pres = ctx.createBiquadFilter();
     hp1.type = 'highpass'; hp2.type = 'highpass'; hp1.Q.value = 0.707; hp2.Q.value = 0.707;
@@ -1207,6 +1220,7 @@ function engineInit() {
     for (const [m, tr] of engine.queue.splice(0)) node.port.postMessage(m, tr || []);
     applySound(true);
   })().catch((err) => {
+    if (engine.ctx !== ctx) return;
     engine.failed = true; engine.error = err;
     console.error('Echo Loop+ Touch: the sound engine could not start.', err);
     throw err;
@@ -1220,19 +1234,28 @@ function engineFailText() {
   if (!navigator.onLine && !(navigator.serviceWorker && navigator.serviceWorker.controller)) return 'The sound engine needs one online start — connect and open the app again';
   return 'The sound engine couldn’t start — close the app and open it again';
 }
-// The audio was interrupted (a call, Siri, an alarm) or resumed: show it on the play button.
+// The sound engine's state changed. While playing, only iOS stops it: 'interrupted' is a call, Siri or an alarm (iOS may
+// carry on by itself afterwards; the play button shows Continue meanwhile); 'suspended' is the earphones going away,
+// a Pause or Stop from them that went to the engine instead of to the app, or an interruption iOS won't carry on after.
+let ctxOpAt = 0;                                         // when the app last asked the engine to suspend or resume
+const ctxInterrupted = () => (engine.ctx && engine.ctx.state === 'interrupted') || (navigator.audioSession && navigator.audioSession.state === 'interrupted');
 function onCtxState() {
+  const st = engine.ctx ? engine.ctx.state : '', own = performance.now() - ctxOpAt < 1500;
+  if (engine.playing && st === 'interrupted') engine.stale = true;
+  else if (engine.playing && st === 'suspended' && !own) { systemStop(); return; }
+  else if (st === 'running' && !engine.playing && !engine.wantPlay && !own) scheduleIdle();   // iOS started it while paused
   renderPlayState();
   if (ctxRunning() && engine.playing) startRAF();
   if (ctxRunning() && (engine.playing || engine.wantPlay)) keepAlive(true);   // after an interruption: the silent track takes the Lock Screen back
 }
-let gateOpen = false;
+let gateOpen = false, gateGen = 0;
 const gateWaiters = [];
 function openGate() {
   if (gateOpen) return;
   gateOpen = true;
-  engineInit().then(() => { gateWaiters.splice(0).forEach((f) => f.ok()); })
-    .catch((err) => gateWaiters.splice(0).forEach((f) => f.fail(err)));
+  const g = ++gateGen;                                   // an engine replaced meanwhile answers no one
+  engineInit().then(() => { if (g === gateGen) gateWaiters.splice(0).forEach((f) => f.ok()); })
+    .catch((err) => { if (g === gateGen) gateWaiters.splice(0).forEach((f) => f.fail(err)); });
 }
 function engineGate() {
   if (engine.node) return Promise.resolve();
@@ -1242,21 +1265,63 @@ function engineGate() {
 // Everything that starts sound goes through here first, while the tap is still being handled.
 function userPlayIntent() {
   setAudioSession();
+  if (engine.stale && pressed()) engineReset();
   openGate();
-  if (engine.ctx && engine.ctx.state !== 'running') { try { const p = engine.ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  if (engine.ctx && engine.ctx.state !== 'running') ctxResume();
   keepAlive(true);
   clearIdle();
 }
-// Shortly after a pause the audio hardware is let go (saves battery, and the Lock Screen's buttons then always reach the
-// silent track rather than the sound engine); the next Play wakes it again.
+// A tap, or a Play from the Lock Screen or the earphones, in the last few seconds: iOS lets a new sound engine start.
+let tapAt = -1e9;
+for (const type of ['pointerup', 'touchend', 'keydown']) window.addEventListener(type, () => { tapAt = performance.now(); }, { capture: true, passive: true });
+const pressed = () => (navigator.userActivation && navigator.userActivation.isActive) || performance.now() - tapAt < 1000;
+function ctxResume() {
+  const ctx = engine.ctx; if (!ctx) return Promise.resolve();
+  ctxOpAt = performance.now();
+  try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); return p || Promise.resolve(); } catch (e) { return Promise.resolve(); }
+}
+// Paused engines are suspended (scheduleIdle): a suspended engine doesn't take the earphones' Play or Pause itself (iOS would
+// send them to it instead of to the app, and it can only restart itself), nor is it restarted by iOS after a call.
+function ctxSuspend() {
+  const ctx = engine.ctx; if (!ctx || ctx.state === 'closed') return;
+  ctxOpAt = performance.now();
+  try { const p = ctx.suspend(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+}
+// iOS stopped the sound itself (see onCtxState). Like a native player: pause, and start afresh with the next Play,
+// since the old engine may go on playing to an output that has gone (sound nowhere, until the app was reopened).
+function systemStop() {
+  engine.stale = true;
+  clearTimeout(stopCheck); stopCheck = 0;
+  if (engine.playing || engine.wantPlay) audio.pause();
+  ctxSuspend();
+}
+// A fresh sound engine on today's output, the same recording from the same place (openTrack does the rest).
+function engineReset() {
+  engine.stale = false;
+  const { ctx, node } = engine;
+  if (!ctx) return;
+  if (engReady()) pendingSeek = engine.ended ? 0 : enginePosition();
+  engine.playing = false; stopTick();                    // quietly: the Play that asked for this follows at once
+  engineStop();
+  if (node) { node.port.onmessage = null; node.onprocessorerror = null; }
+  ctx.onstatechange = null;
+  try { const p = ctx.close(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  if (engine.loadResolve) { const r = engine.loadResolve; engine.loadResolve = null; r(); }
+  Object.assign(engine, { ctx: null, node: null, nodes: null, initP: null, failed: false, error: null, queue: [], hist: [],
+    ended: false, rate: 1, fileLoop: false, loopGen: -1, seekTarget: null, seekFrame: -1, loadId: null });
+  gateOpen = false; openToken++; loadingId = null; gateWaitId = null;
+}
+// After a pause the audio hardware is let go (saves battery, and the Lock Screen's and earphones' buttons then always reach
+// the silent track rather than the sound engine): once the sound has faded out and left the earphones, or after 2 s
+// when the engine never says it has. The next Play wakes it again.
 let idleTimer = 0;
 function clearIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = 0; } }
-function scheduleIdle() {
+function scheduleIdle(ms = 2000) {
   clearIdle();
   idleTimer = setTimeout(() => {
     idleTimer = 0;
-    if (engine.ctx && !engine.playing && !engine.wantPlay && engine.ctx.state === 'running') engine.ctx.suspend().catch(() => {});
-  }, 2000);
+    if (engine.ctx && !engine.playing && !engine.wantPlay && engine.ctx.state === 'running') ctxSuspend();
+  }, ms);
 }
 function applySound(now) {
   const n = engine.nodes; if (!n) return;
@@ -1281,7 +1346,7 @@ function onEngineMsg(m) {
       break;
     case 'loopdone': if (m.gen === engine.loopGen) emit('loopdone'); break;
     case 'playing': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); emit('playing'); break;
-    case 'paused': H.push({ frame: m.frame, pos: m.pos, rate: 0 }); break;
+    case 'paused': H.push({ frame: m.frame, pos: m.pos, rate: 0 }); if (!engine.playing && !engine.wantPlay) scheduleIdle(400); break;
     case 'ended':
       H.push({ frame: m.frame, pos: m.pos, rate: 0 });
       engine.playing = false; engine.ended = true; engine.lastPos = m.pos; stopTick();
@@ -1327,7 +1392,12 @@ function stopTick() { if (engine.tick) { clearInterval(engine.tick); engine.tick
 async function enginePlay() {
   try { await engineInit(); } catch (e) { throw Object.assign(new Error('engine'), { name: 'EngineError' }); }
   // outside a tap iOS may never answer resume(), so don't wait for it forever
-  if (engine.ctx.state !== 'running') { try { await Promise.race([engine.ctx.resume(), sleep(900)]); } catch (e) {} }
+  if (engine.ctx.state !== 'running') { try { await Promise.race([ctxResume(), sleep(900)]); } catch (e) {} }
+  // still stopped right after a press: iOS has left this engine stuck (it happens after the output changed); one fresh start
+  if (engine.ctx.state === 'suspended' && navigator.userActivation && navigator.userActivation.isActive && performance.now() - engine.bornAt > 4000) {
+    engine.stale = true;
+    throw Object.assign(new Error('stuck'), { name: 'StaleError' });
+  }
   if (!engReady()) { engine.wantPlay = true; renderPlayState(); return; }
   if (engine.playing) return;
   if (engine.ended) { engine.ended = false; engineSeek(0); }
@@ -1339,6 +1409,7 @@ async function enginePlay() {
 }
 function enginePause() {
   engine.wantPlay = false;
+  if (engine.ctx && !ctxRunning()) ctxSuspend();
   if (!engine.playing) { keepAlive(false); renderPlayState(); return; }
   engine.lastPos = enginePosition();
   engine.playing = false; stopTick();
@@ -2006,6 +2077,7 @@ function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
   const same = engine.id === t.id && engine.loaded, prevId = S.currentId;
   S.currentId = t.id; S.pass = 1; S.sec = null; S.mark = null;
   pendingSeek = startAt > 0.5 ? startAt : null;
+  const from = pendingSeek || 0;                          // (a fresh engine started just below keeps the old place in pendingSeek)
   if (autoplay) userPlayIntent();                         // still inside the tap that asked for it (after the switch, for the silent track's length)
   setViewFor(t, view);
   engineClearLoop(); setLoopFlag(); applyRate();
@@ -2013,8 +2085,8 @@ function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
   renderNowPlaying(); renderRows(prevId, t.id); renderCount(); renderMode(); renderFlags(); renderProgress();
   loadWave(t);
   if (same) {
-    const to = pendingSeek || 0; pendingSeek = null;
-    seekTo(to);
+    pendingSeek = null;
+    seekTo(from);
     if (autoplay) playNow();
   } else {
     openTrack(t, autoplay);
@@ -2095,6 +2167,7 @@ function playNow() {
     return;
   }
   audio.play().catch((err) => {
+    if (err && err.name === 'StaleError') { playNow(); return; }
     syncKeepAlive(); renderPlayState();
     toast(err && err.name === 'EngineError' ? engineFailText() : 'Playback couldn’t start — tap Play again');
   });
@@ -2102,7 +2175,10 @@ function playNow() {
 function togglePlay() {
   if (engine.wantPlay && !engReady()) { engine.wantPlay = false; syncKeepAlive(); renderPlayState(); return; }
   // playing, but iOS interrupted the sound (a call, Siri, an alarm): carry on
-  if (!audio.paused && !ctxRunning()) { userPlayIntent(); setTimeout(renderPlayState, 300); return; }
+  if (!audio.paused && !ctxRunning()) {
+    if (engine.stale) playNow(); else { userPlayIntent(); setTimeout(renderPlayState, 300); }
+    return;
+  }
   if (audio.paused) playNow(); else audio.pause();
 }
 function seekTo(t) {
@@ -3566,10 +3642,10 @@ const ART = WEB ? [
 const idle = () => el.busy.hidden;                       // false while something is being made (busy overlay)
 function setupMediaSession() {
   if (!MS) return;
-  const on = (action, fn) => { try { MS.setActionHandler(action, (d) => { if (idle()) fn(d); }); } catch (e) {} };
-  on('play', () => { if (!audio.paused && !ctxRunning()) userPlayIntent(); else playNow(); });
+  const on = (action, fn) => { try { MS.setActionHandler(action, (d) => { tapAt = performance.now(); if (idle()) fn(d); }); } catch (e) {} };
+  on('play', () => { if (!audio.paused && !ctxRunning() && !engine.stale) userPlayIntent(); else playNow(); });
   on('pause', () => audio.pause());
-  on('stop', () => audio.pause());
+  on('stop', () => { engine.stale = true; audio.pause(); });   // the earphones' Stop: the next Play starts a fresh engine
   on('previoustrack', () => goPrev());
   on('nexttrack', () => goNext('user'));
   on('seekto', (d) => { if (d && typeof d.seekTime === 'number') userSeekTo(d.seekTime); });

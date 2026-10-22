@@ -1115,7 +1115,16 @@ function enginePost(msg, transfer) {
   if (engine.node) engine.node.port.postMessage(msg, transfer || []);
   else engine.queue.push([msg, transfer]);
 }
-function silentWav() {                     // 8 s of silence, looped: the keep-alive sound
+// The keep-alive sound is a long silent MP3 whose own time follows the recording: Safari copies a media element's time
+// onto the Lock Screen whenever that time jumps (a seek, a loop), so the copy has to be right. It plays at the
+// recording's speed, jumps when the recording jumps and is corrected when it drifts (updatePositionState, syncLockScreen).
+// MPEG-2 Layer III, 16 kHz mono, 8 kbps: 36-byte frames of 36 ms, all silence (about 3.6 MB an hour).
+function silentMp3(seconds) {
+  const n = Math.ceil(seconds / 0.036), u = new Uint8Array(n * 36);
+  for (let o = 0; o < u.length; o += 36) { u[o] = 0xFF; u[o + 1] = 0xF3; u[o + 2] = 0x18; u[o + 3] = 0xC0; }
+  return URL.createObjectURL(new Blob([u], { type: 'audio/mpeg' }));
+}
+function silentWav() {                     // 8 s of silence, looped: the fallback keep-alive if the silent MP3 can't play
   const rate = 8000, n = rate * 8, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
   const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
   str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
@@ -1123,13 +1132,44 @@ function silentWav() {                     // 8 s of silence, looped: the keep-a
   str(36, 'data'); v.setUint32(40, n * 2, true);
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
-let keepSrc = '';
+let keepSrc = '', keepLen = 0, keepMirror = true, mirrorAt = 0;
+const playKeep = () => { try { const p = keep.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
+function keepReady(d) {                                   // a silent track longer than the recording, so it never loops while it plays
+  const want = Math.max(4 * 3600, (d || 0) + 600);
+  if (!keepMirror || keepLen >= want) return;
+  const old = keepSrc, playing = !!old && !keep.paused;
+  keepLen = Math.ceil(want / 3600) * 3600; keepSrc = silentMp3(keepLen);
+  keep.src = keepSrc; keep.loop = true; mirrorTo(audio.currentTime || 0, true);
+  if (old) URL.revokeObjectURL(old);
+  if (playing) playKeep();
+}
 function keepAlive(on) {
   if (on) {
-    if (!keepSrc) { keepSrc = silentWav(); keep.src = keepSrc; keep.loop = true; }
-    if (keep.paused) { try { const p = keep.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    keepReady(durationOf());
+    mirrorRate();
+    if (keep.paused) mirrorTo(audio.currentTime || 0, true);
+    playKeep();                                           // even when it already plays: it must stay the sound the Lock Screen talks to
   } else if (!keep.paused) { try { keep.pause(); } catch (e) {} }
 }
+keep.addEventListener('error', () => {                     // this iPhone can't play the silent MP3: the old 8 s loop keeps the app awake
+  if (!keepMirror || !keepSrc) return;
+  const old = keepSrc;
+  keepMirror = false; keepSrc = silentWav(); keep.src = keepSrc; keep.loop = true; URL.revokeObjectURL(old);
+  if (engine.playing || engine.wantPlay) playKeep();
+});
+// Moves the silent track to `pos`: at once when forced or far off, otherwise at most once a second (very short loops).
+function mirrorTo(pos, force = false) {
+  if (!keepMirror || !keepSrc || !(pos >= 0)) return;
+  const off = Math.abs((keep.currentTime || 0) - pos);
+  if (off < 0.05 || (!force && off < 2 && performance.now() - mirrorAt < 1000)) return;
+  if (isFinite(keep.duration) && pos > keep.duration - 1) return;
+  try { keep.currentTime = pos; mirrorAt = performance.now(); } catch (e) {}
+}
+function mirrorRate() {
+  const r = effRate();
+  try { if (keep.playbackRate !== r) { keep.defaultPlaybackRate = r; keep.playbackRate = r; } } catch (e) {}
+}
+const mirrorOff = (p) => (keepMirror && keepSrc && !keep.paused && !keep.seeking && keep.readyState >= 1 ? Math.abs((keep.currentTime || 0) - p) : 0);
 const syncKeepAlive = () => keepAlive(engine.playing || engine.wantPlay);
 function setAudioSession() {
   // iOS 17+: this is media playback — sound with the silent switch on, and it keeps going with the screen locked
@@ -1181,7 +1221,11 @@ function engineFailText() {
   return 'The sound engine couldn’t start — close the app and open it again';
 }
 // The audio was interrupted (a call, Siri, an alarm) or resumed: show it on the play button.
-function onCtxState() { renderPlayState(); if (ctxRunning() && engine.playing) startRAF(); }
+function onCtxState() {
+  renderPlayState();
+  if (ctxRunning() && engine.playing) startRAF();
+  if (ctxRunning() && (engine.playing || engine.wantPlay)) keepAlive(true);   // after an interruption: the silent track takes the Lock Screen back
+}
 let gateOpen = false;
 const gateWaiters = [];
 function openGate() {
@@ -1203,7 +1247,8 @@ function userPlayIntent() {
   keepAlive(true);
   clearIdle();
 }
-// After a while on pause the audio hardware is let go (saves battery); the next Play wakes it again.
+// Shortly after a pause the audio hardware is let go (saves battery, and the Lock Screen's buttons then always reach the
+// silent track rather than the sound engine); the next Play wakes it again.
 let idleTimer = 0;
 function clearIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = 0; } }
 function scheduleIdle() {
@@ -1211,7 +1256,7 @@ function scheduleIdle() {
   idleTimer = setTimeout(() => {
     idleTimer = 0;
     if (engine.ctx && !engine.playing && !engine.wantPlay && engine.ctx.state === 'running') engine.ctx.suspend().catch(() => {});
-  }, 45000);
+  }, 2000);
 }
 function applySound(now) {
   const n = engine.nodes; if (!n) return;
@@ -1958,10 +2003,10 @@ function seekAndLoop(t) { seekTo(t); syncEngineLoop(); }
 function loadTrack(t, { autoplay = false, startAt = 0, view = null } = {}) {
   if (!t) return;
   if (!S.blobs.get(t.id)) { toast('That recording is missing'); return; }
-  if (autoplay) userPlayIntent();                         // still inside the tap that asked for it
   const same = engine.id === t.id && engine.loaded, prevId = S.currentId;
   S.currentId = t.id; S.pass = 1; S.sec = null; S.mark = null;
   pendingSeek = startAt > 0.5 ? startAt : null;
+  if (autoplay) userPlayIntent();                         // still inside the tap that asked for it (after the switch, for the silent track's length)
   setViewFor(t, view);
   engineClearLoop(); setLoopFlag(); applyRate();
   updateMetadata();
@@ -3555,16 +3600,21 @@ function lockPos() {
   return clamp(e.pos + (heardFrame() - e.frame) / engine.ctx.sampleRate * (e.rate || 0), 0, d);
 }
 function tellLockScreen(d, position) {
-  if (!MS || !MS.setPositionState || !isFinite(d) || d <= 0) return;
+  if (!isFinite(d) || d <= 0) return;
+  if (!MS || !MS.setPositionState) { mirrorTo(clamp(position, 0, d)); return; }
   const playbackRate = effRate();
   position = clamp(position, 0, d); msFlip = !msFlip;
   try { MS.setPositionState({ duration: msFlip ? d + 1e-6 : d, playbackRate, position }); msPos = { position, playbackRate, d, at: performance.now() }; } catch (e) {}
+  if (keepSrc) keepReady(d);
+  mirrorRate(); mirrorTo(position);
 }
 function updatePositionState() { tellLockScreen(audio.duration, lockPos()); }
 function syncLockScreen() {                              // on every engine report (they keep coming with the screen locked)
   if (!msPos || audio.paused) return;
-  const said = Math.min(msPos.d, msPos.position + (performance.now() - msPos.at) / 1000 * msPos.playbackRate);
-  if (Math.abs(said - lockPos()) > 0.25) updatePositionState();
+  const p = lockPos(), said = Math.min(msPos.d, msPos.position + (performance.now() - msPos.at) / 1000 * msPos.playbackRate);
+  if (Math.abs(said - p) > 0.25) updatePositionState();
+  // the silent track drifting on its own: moved back quietly, not more than every 1.5 s (each move delays it a little again)
+  else if (mirrorOff(p) > 0.25 * Math.max(1, effRate()) && performance.now() - mirrorAt > 1500) mirrorTo(p, true);
 }
 
 /* ================= rendering ================= */

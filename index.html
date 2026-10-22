@@ -1237,13 +1237,17 @@ function engineFailText() {
 // The sound engine's state changed. While playing, only iOS stops it: 'interrupted' is a call, Siri or an alarm (iOS may
 // carry on by itself afterwards; the play button shows Continue meanwhile); 'suspended' is the earphones going away,
 // a Pause or Stop from them that went to the engine instead of to the app, or an interruption iOS won't carry on after.
+// After a call the next Play starts a fresh engine too: Bluetooth earphones switch to their call mode and back meanwhile.
 let ctxOpAt = 0;                                         // when the app last asked the engine to suspend or resume
 const ctxInterrupted = () => (engine.ctx && engine.ctx.state === 'interrupted') || (navigator.audioSession && navigator.audioSession.state === 'interrupted');
 function onCtxState() {
   const st = engine.ctx ? engine.ctx.state : '', own = performance.now() - ctxOpAt < 1500;
-  if (engine.playing && st === 'interrupted') engine.stale = true;
-  else if (engine.playing && st === 'suspended' && !own) { systemStop(); return; }
-  else if (st === 'running' && !engine.playing && !engine.wantPlay && !own) scheduleIdle();   // iOS started it while paused
+  if (st === 'interrupted') engine.stale = true;
+  if (engine.playing && st === 'suspended' && !own) { systemStop(); return; }
+  if (!engine.playing && !engine.wantPlay && !own) {
+    if (st === 'running') scheduleIdle();                                       // iOS started it while paused
+    else if (st === 'suspended' || st === 'interrupted') ctxSuspend();          // iOS stopped it while paused: so it can't take commands itself
+  }
   renderPlayState();
   if (ctxRunning() && engine.playing) startRAF();
   if (ctxRunning() && (engine.playing || engine.wantPlay)) keepAlive(true);   // after an interruption: the silent track takes the Lock Screen back
@@ -1320,7 +1324,7 @@ function scheduleIdle(ms = 2000) {
   clearIdle();
   idleTimer = setTimeout(() => {
     idleTimer = 0;
-    if (engine.ctx && !engine.playing && !engine.wantPlay && engine.ctx.state === 'running') ctxSuspend();
+    if (engine.ctx && !engine.playing && !engine.wantPlay && engine.ctx.state !== 'closed') ctxSuspend();   // also one iOS stopped itself
   }, ms);
 }
 function applySound(now) {

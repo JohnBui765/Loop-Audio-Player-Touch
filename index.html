@@ -1104,6 +1104,7 @@ const engine = {
   stale: false, bornAt: 0,                               // stale: iOS stopped this engine itself, the next Play on screen starts a fresh one
   outOn: false, wasIntr: false,                          // outOn: its sound goes out (outputOn); wasIntr: a call or another app interrupted it
   dead: false,                                           // iOS froze the app while paused: this engine's way to the speaker is gone
+  reports: 0,                                            // reports from the audio thread: it is really running
 };
 // The same code as worklet.js, filled in when index.html is built. Used only when worklet.js can't be loaded
 // (a computer opening index.html straight from a folder); iPhone always uses the file.
@@ -1220,7 +1221,7 @@ setInterval(() => {                                      // a long gap between t
   beatWall = now;
 }, 1000);
 const needsFallback = () => document.visibilityState === 'hidden' && !!current() && S.blobs.has(S.currentId)
-  && (engine.dead || engine.stale || (!!engine.ctx && !ctxRunning()));
+  && (engine.dead || engine.stale || !ctxRunning());
 const fbTime = () => (!fb ? 0 : keep.readyState >= 1 ? keep.currentTime : fb.at);
 function fbStart(t, at) {
   const blob = t && S.blobs.get(t.id);
@@ -1245,10 +1246,56 @@ function fbStart(t, at) {
   fbPlay();
   return true;
 }
+// Playing must be heard. 1.5 s after the engine starts, its clock must have moved and its audio thread reported in;
+// if not, iOS has left it silent and it is replaced at once: by the locked-screen player with the screen locked (or
+// when even a fresh engine stays silent), by a fresh engine on screen. The locked-screen player is checked the same way.
+let watchTimer = 0, rescuedAt = -1e9;
+function watchSound() {
+  clearTimeout(watchTimer);
+  const ctx = engine.ctx; if (!ctx) return;
+  const c0 = ctx.currentTime, w0 = performance.now(), n0 = engine.reports;
+  watchTimer = setTimeout(() => {
+    watchTimer = 0;
+    if (fb || !engine.playing || engine.ctx !== ctx) return;
+    const moved = ctx.currentTime - c0, wall = (performance.now() - w0) / 1000, reports = engine.reports - n0;
+    if (ctx.state === 'running' && moved > wall * 0.3 && reports > 0) return;
+    slg(`playing but not heard (engine ${ctx.state}, its clock moved ${moved.toFixed(2)} s in ${wall.toFixed(2)} s, ${reports} reports) ${slgState()}`);
+    rescueSound();
+  }, 1500);
+}
+function rescueSound() {
+  const t = current(); if (!t) return;
+  const pos = engine.ended ? 0 : enginePosition();
+  engine.dead = true; engine.stale = true;
+  enginePause();
+  const fresh = performance.now() - engine.bornAt < 6000, again = performance.now() - rescuedAt < 10000;
+  rescuedAt = performance.now();
+  if (document.visibilityState === 'visible' && !fresh && !again && pressed()) {
+    slg('rescue: a fresh engine');
+    if (engReady()) engineSeek(pos); else pendingSeek = pos;
+    playNow();                                           // stale + a press on screen: engineReset, then the same place
+  } else {
+    slg('rescue: the ordinary audio player');
+    fbStart(t, pos);
+  }
+}
+let fbWatch = 0;
+function watchFallback() {
+  clearTimeout(fbWatch);
+  const t0 = fbTime(), id = fb && fb.id;
+  fbWatch = setTimeout(() => {
+    fbWatch = 0;
+    if (!fb || fb.id !== id || !fb.playing) return;
+    if (Math.abs(fbTime() - t0) > 0.3) return;
+    slg(`the ordinary audio player is not moving (${keep.paused ? 'paused' : 'playing'}, ready ${keep.readyState}): asked again ${slgState()}`);
+    playKeep();
+  }, 2500);
+}
 function fbPlay() {
   if (!fb) return Promise.resolve();
   if (!fb.playing) { fb.playing = true; playKeep(); emit('play'); updatePositionState(); }
   else playKeep();
+  watchFallback();
   return Promise.resolve();
 }
 function fbPause() {
@@ -1497,7 +1544,7 @@ function onEngineMsg(m) {
   if (m.id !== engine.id) return;                       // left over from a recording that has been switched away from
   const H = engine.hist;
   switch (m.type) {
-    case 'pos': H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); pagerAt(m.pos); syncLockScreen(); if (slogPlay) { slogPlay = false; slg(`engine producing sound at ${fmtPrecise(m.pos)} ${slgState()}`); } break;
+    case 'pos': engine.reports++; H.push({ frame: m.frame, pos: m.pos, rate: m.rate }); pagerAt(m.pos); syncLockScreen(); if (slogPlay) { slogPlay = false; slg(`engine producing sound at ${fmtPrecise(m.pos)} ${slgState()}`); } break;
     case 'need': pagerWant(m.page, true); break;            // the sound is waiting for this page
     case 'jump':
       H.push({ frame: m.frame, pos: m.pos, rate: engine.playing ? m.rate : 0 });
@@ -1573,6 +1620,7 @@ async function enginePlay() {
   enginePost({ t: 'play' });
   slogPlay = true; slg(`play ${slgState()}`);
   engine.playing = true; engine.ended = false; startTick(); clearIdle();
+  watchSound();
   keepAlive(true);
   emit('play');
 }

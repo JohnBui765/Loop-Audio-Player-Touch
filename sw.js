@@ -2,7 +2,7 @@
 // Your recordings, play counts and flags live in the app's database, not here.
 // Bump the version whenever you upload changed files, so phones pick them up.
 // The "elt-" prefix keeps this cache apart from Echo Loop+ ("elp-"), Echo Loop+ Desktop ("eld-") and Echo Loop ("echo-loop-").
-const CACHE = 'elt-v9';
+const CACHE = 'elt-v10';
 const SHELL = ['./', './index.html', './worklet.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
